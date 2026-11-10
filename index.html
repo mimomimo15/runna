@@ -24,7 +24,7 @@
       <a class="btn active" href="index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M8.5 15l2.5 2.5 4.5-5"/></svg><span>Plan</span></a>
       <a class="btn" href="stats.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6"/></svg><span>Stats</span></a>
       <button class="btn hidden" id="btn-install" type="button">Installer l'app</button>
-      <button class="btn hidden" id="btn-account" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c1-3.8 4-5.5 7.5-5.5s6.500 1.700 7.500 5.500"/></svg><span>Compte</span></button>
+      <button class="btn" id="btn-account" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c1-3.8 4-5.5 7.5-5.5s6.500 1.700 7.500 5.500"/></svg><span>Compte</span></button>
     </nav>
   </header>
   <div id="sync" role="status"></div>
@@ -163,7 +163,7 @@ function render() {
   const on = JC.connected(), plan = on ? JC.activePlan() : null;
   if (editing && !(plan && findSession(plan, editing))) editing = null;
   $('setup').classList.toggle('hidden', on);
-  $('btn-account').classList.toggle('hidden', !on);
+  $('btn-account').classList.toggle('active', on && showAccount && !editing);
   $('account').classList.toggle('hidden', !on || !showAccount || !!editing);
   $('goal').classList.toggle('hidden', !on || !!plan);
   $('plan').classList.toggle('hidden', !plan || !!editing);
@@ -389,7 +389,10 @@ $('goal-form').addEventListener('submit', e => {
 });
 
 /* ---------- compte, connexion ---------- */
-$('btn-account').addEventListener('click', () => { showAccount = !showAccount; disarm(); render(); if (showAccount) window.scrollTo(0, 0); });
+$('btn-account').addEventListener('click', () => {
+  if (!JC.connected()) { window.scrollTo(0, 0); $('in-token').focus(); return; }   // pas encore connecté : le compte, c'est la connexion
+  showAccount = !showAccount; disarm(); render(); if (showAccount) window.scrollTo(0, 0);
+});
 $('chk-auto').addEventListener('change', e => { JC.setAuto(e.target.checked); if (e.target.checked) JC.autoAdjust(); render(); });
 $('btn-logout').addEventListener('click', () => { showAccount = false; editing = null; JC.disconnect(); render(); });
 $('btn-csv').addEventListener('click', () => {
@@ -436,6 +439,7 @@ JC.onChange(() => {
   if (editing) renderSync(); else render();
 });
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+if (location.hash === '#compte') { showAccount = true; try { history.replaceState(null, '', location.pathname); } catch (e) { /* sans importance */ } }
 JC.init();
 initGoalForm();
 render();
