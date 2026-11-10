@@ -210,7 +210,8 @@ const JC = (() => {
   /* Allures d'entraînement (s/km) à partir d'une performance récente, sinon du temps visé. */
   function computePaces(g) {
     const D = DIST[g.dist]; let base = null, src = '';
-    if (g.refSec > 0 && DIST[g.refDist]) { base = { d: DIST[g.refDist].exact, t: g.refSec }; src = 'ref'; }
+    const refKm = g.refKm > 0 ? g.refKm : DIST[g.refDist] ? DIST[g.refDist].exact : 0;   // distance libre (km) ou distance standard
+    if (g.refSec > 0 && refKm > 0) { base = { d: refKm, t: g.refSec }; src = 'ref'; }
     else if (g.targetSec > 0) { base = { d: D.exact, t: g.targetSec }; src = 'target'; }
     if (!base) return null;
     const p = d => riegel(base.t, base.d, d) / d;

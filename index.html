@@ -91,7 +91,8 @@
         <div class="fld"><label class="f">Temps visé pour la course (h · min · s)</label>
           <div class="hms"><input id="g-th" type="text" inputmode="numeric" placeholder="h" aria-label="Temps visé : heures"><input id="g-tm" type="text" inputmode="numeric" placeholder="min" aria-label="Temps visé : minutes"><input id="g-ts" type="text" inputmode="numeric" placeholder="s" aria-label="Temps visé : secondes"></div></div>
         <div class="fld"><label class="f" for="g-refd">Performance récente (course ou effort maximal)</label>
-          <div><select id="g-refd" style="max-width:260px;margin-bottom:6px"><option value="">—</option><option value="5">5 km</option><option value="10">10 km</option><option value="21.1">Demi-marathon</option><option value="42.2">Marathon</option></select>
+          <div><select id="g-refd" style="max-width:260px;margin-bottom:6px"><option value="">—</option><option value="5">5 km</option><option value="10">10 km</option><option value="21.1">Demi-marathon</option><option value="42.2">Marathon</option><option value="other">Autre distance…</option></select>
+          <input id="g-refkm" class="hidden" type="text" inputmode="decimal" autocomplete="off" placeholder="Distance en km (ex. 8,5)" aria-label="Distance de la performance en km" style="max-width:260px;margin-bottom:6px">
           <div class="hms"><input id="g-rh" type="text" inputmode="numeric" placeholder="h" aria-label="Performance : heures"><input id="g-rm" type="text" inputmode="numeric" placeholder="min" aria-label="Performance : minutes"><input id="g-rs" type="text" inputmode="numeric" placeholder="s" aria-label="Performance : secondes"></div></div></div>
       </fieldset>
 
@@ -329,6 +330,11 @@ function initGoalForm() {
   $('g-race').min = JC.addDays(t, 4);
   $('g-weekly').placeholder = String(JC.DEF_WEEKLY[+$('g-level').value]);
 }
+$('g-refd').addEventListener('change', () => {
+  const other = $('g-refd').value === 'other';
+  $('g-refkm').classList.toggle('hidden', !other);
+  if (other) $('g-refkm').focus();
+});
 $('g-level').addEventListener('change', () => { $('g-weekly').placeholder = String(JC.DEF_WEEKLY[+$('g-level').value]); });
 
 $('goal-form').addEventListener('submit', e => {
@@ -345,10 +351,15 @@ $('goal-form').addEventListener('submit', e => {
     const dist = $('g-dist').value, D = JC.DIST[dist];
     const lim = (sec, label) => { if (sec && (sec / D.exact < 150 || sec / D.exact > 900)) throw new Error(label + ' peu plausible pour cette distance. Vérifie les heures, minutes et secondes.'); };
     lim(targetSec, 'Temps visé');
-    if (refSec) { const k = JC.DIST[refDist].exact; if (refSec / k < 150 || refSec / k > 900) throw new Error('Performance récente peu plausible. Vérifie les heures, minutes et secondes.'); }
+    let refKm = 0;
+    if (refDist === 'other') {
+      refKm = JC.num($('g-refkm').value);
+      if (!(refKm >= 1 && refKm <= 100)) throw new Error('Distance de la performance récente invalide : entre un nombre de km entre 1 et 100.');
+    } else if (refDist) refKm = JC.DIST[refDist].exact;
+    if (refSec && (refSec / refKm < 150 || refSec / refKm > 900)) throw new Error('Performance récente peu plausible. Vérifie la distance et les heures, minutes et secondes.');
     JC.createPlan({ dist, name: $('g-name').value.trim(), raceDate: $('g-race').value, startDate: $('g-start').value,
       level: +$('g-level').value, days: +$('g-days').value, weeklyKm, longDay: $('g-long').value === '' ? null : +$('g-long').value,
-      targetSec, refDist: refSec ? refDist : '', refSec });
+      targetSec, refKm: refSec ? refKm : 0, refSec });
     $('goal-err').textContent = ''; openWeeks.clear(); closedWeeks.clear();
     render(); window.scrollTo(0, 0);
   } catch (err) { $('goal-err').textContent = err.message; }
