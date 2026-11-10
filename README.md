@@ -15,7 +15,8 @@ Généré dans le navigateur (`generatePlan` dans `app.js`), semaines calées su
 - phases Base → Développement → Spécifique → Affûtage → Course ;
 - volume hebdomadaire qui monte d'au plus ~10 % par semaine, une semaine allégée sur quatre ;
 - sortie longue progressive (+2 km au plus), séances de qualité selon la phase (fartlek, seuil, intervalles, allure course) ;
-- allures calculées à partir d'une performance récente ou du temps visé (formule de Riegel), sinon consignes aux sensations.
+- allures calculées à partir d'une performance récente ou du temps visé (formule de Riegel), sinon consignes aux sensations ;
+- ajustement automatique (`evaluate` / `autoAdjust`) : selon les séances entrées (allure, distance, ressenti, séances manquées), les allures et le volume des séances à venir sont recalculés ; chaque ajustement est affiché et annulable, et le réglage se coupe dans Compte.
 
 ## Fichiers
 

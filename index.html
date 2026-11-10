@@ -54,6 +54,7 @@
   <section class="card hidden" id="account">
     <h2>Compte</h2>
     <p class="small muted" id="account-info"></p>
+    <label class="row small hidden" id="auto-row" style="gap:8px;cursor:pointer"><input id="chk-auto" type="checkbox" style="width:20px;min-height:20px;height:20px;flex:none"> Ajuster automatiquement le plan selon mes séances</label>
     <div class="row" style="margin-top:12px">
       <button class="btn small hidden" id="btn-csv" type="button">Exporter en CSV</button>
       <button class="btn small danger hidden" id="btn-delplan" type="button">Supprimer le plan</button>
@@ -163,6 +164,8 @@ function render() {
   $('account-info').textContent = 'Connecté : ' + JC.login() + ' · données dans le dépôt privé ' + JC.repo();
   $('btn-csv').classList.toggle('hidden', !plan);
   $('btn-delplan').classList.toggle('hidden', !plan);
+  $('auto-row').classList.toggle('hidden', !plan);
+  if (plan) $('chk-auto').checked = plan.goal.auto !== false;
   if (plan && !editing) renderPlan(plan);
 }
 
@@ -229,9 +232,14 @@ function renderPlan(plan) {
     hero += '<details><summary>Tes allures d\'entraînement</summary><div class="paces">' +
       row('Facile / longue', JC.fmtPace(P.easyLo).replace('/km', '') + ' à ' + JC.fmtPace(P.easyHi)) +
       row('Allure course', JC.fmtPace(P.race)) + row('Seuil', JC.fmtPace(P.thr)) + row('Intervalles (5 km)', JC.fmtPace(P.p5)) + '</div>' +
-      (P.predicted ? '<p class="muted small" style="margin:8px 0 0">Ta performance récente équivaut à environ ' + esc(JC.fmtDur(P.predicted)) + ' sur ' + esc(D.label.toLowerCase()) + ' (estimation).</p>' : '') + '</details>';
+      (P.predicted ? '<p class="muted small" style="margin:8px 0 0">Ta forme actuelle équivaut à environ ' + esc(JC.fmtDur(P.predicted)) + ' sur ' + esc(D.label.toLowerCase()) + ' (estimation).</p>' : '') + '</details>';
   }
   (plan.warnings || []).forEach(w => { hero += '<div class="warn">' + esc(w) + '</div>'; });
+  const hist = plan.history || [], last = hist[hist.length - 1];
+  if (last && JC.diffDays(t, last.at) <= 10) hero += '<div class="warn"><b>Plan ajusté le ' + esc(JC.fmtShort(last.at)) + '</b> – ' + esc(last.text) +
+    (last.from ? ' Les séances à venir ont été recalculées. <button class="btn small" type="button" data-act="undo" style="margin-top:6px">Annuler cet ajustement</button>' : '') + '</div>';
+  if (hist.length > 1) hero += '<details><summary>Historique des ajustements (' + hist.length + ')</summary>' +
+    hist.slice().reverse().map(x => '<p class="small" style="margin:6px 0 0"><b>' + esc(JC.fmtShort(x.at)) + '</b> – ' + esc(x.text) + '</p>').join('') + '</details>';
   $('hero').innerHTML = hero;
 
   const nx = sum.next;
@@ -255,9 +263,11 @@ $('plan').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const plan = JC.activePlan(); if (!plan) return;
   const id = b.dataset.s;
-  if (b.dataset.act === 'toggle') {
+  if (b.dataset.act === 'undo') { JC.undoAdjust(); render(); }
+  else if (b.dataset.act === 'toggle') {
     const l = JC.getLog(plan.id, id);
     JC.setDone(plan.id, id, !(l && l.done));
+    JC.autoAdjust();
     render();
   } else if (b.dataset.act === 'log') openLog(id);
 });
@@ -314,7 +324,9 @@ $('btn-log-save').addEventListener('click', () => {
   try {
     const v = readLog(), old = JC.getLog(plan.id, editing);
     if (JC.hasStats(v)) { v.done = true; v.doneAt = (old && old.doneAt) || JC.today(); }   // des stats = séance faite
-    JC.saveLog(plan.id, editing, v); closeLog();
+    JC.saveLog(plan.id, editing, v);
+    const msg = JC.autoAdjust();
+    closeLog(); if (msg) window.scrollTo(0, 0);
   } catch (e) { $('log-err').textContent = e.message; }
 });
 $('btn-log-cancel').addEventListener('click', closeLog);
@@ -367,6 +379,7 @@ $('goal-form').addEventListener('submit', e => {
 
 /* ---------- compte, connexion ---------- */
 $('btn-account').addEventListener('click', () => { showAccount = !showAccount; disarm(); render(); });
+$('chk-auto').addEventListener('change', e => { JC.setAuto(e.target.checked); if (e.target.checked) JC.autoAdjust(); render(); });
 $('btn-logout').addEventListener('click', () => { showAccount = false; editing = null; JC.disconnect(); render(); });
 $('btn-csv').addEventListener('click', () => {
   const plan = JC.activePlan(); if (!plan) return;
@@ -399,7 +412,11 @@ $('btn-install').addEventListener('click', async () => {
   installEvt = null; $('btn-install').classList.add('hidden');
 });
 
-JC.onChange(() => { if (editing) renderSync(); else render(); });
+let checked = false;          // au premier chargement réussi : séances manquées -> plan allégé au besoin
+JC.onChange(() => {
+  if (!checked && JC.status().state === 'ok') { checked = true; if (!editing && JC.autoAdjust(true)) return; }
+  if (editing) renderSync(); else render();
+});
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 JC.init();
 initGoalForm();

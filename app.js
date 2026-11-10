@@ -206,6 +206,7 @@ const JC = (() => {
   const TYPES = { easy: 'Facile', long: 'Longue', fartlek: 'Fartlek', tempo: 'Seuil', intervals: 'Intervalles', specific: 'Allure course', race: 'Course' };
 
   const riegel = (t1, d1, d2) => t1 * Math.pow(d2 / d1, 1.06);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
   /* Allures d'entraînement (s/km) à partir d'une performance récente, sinon du temps visé. */
   function computePaces(g) {
@@ -213,16 +214,18 @@ const JC = (() => {
     const refKm = g.refKm > 0 ? g.refKm : DIST[g.refDist] ? DIST[g.refDist].exact : 0;   // distance libre (km) ou distance standard
     if (g.refSec > 0 && refKm > 0) { base = { d: refKm, t: g.refSec }; src = 'ref'; }
     else if (g.targetSec > 0) { base = { d: D.exact, t: g.targetSec }; src = 'target'; }
+    else if (g.learnedEasy > 0) { base = { d: 42.195, t: g.learnedEasy / 1.175 * 42.195 }; src = 'learned'; }   // appris des sorties faciles
     if (!base) return null;
+    const f = g.adj && g.adj.pace > 0 ? clamp(g.adj.pace, 0.85, 1.12) : 1;      // ajustement selon les séances réalisées (< 1 = plus vite)
+    base.t *= f;
     const p = d => riegel(base.t, base.d, d) / d;
     const mar = p(42.195);
     const thr = 3600 / (base.d * Math.pow(3600 / base.t, 1 / 1.06));      // allure tenable environ 1 h
     const predicted = riegel(base.t, base.d, D.exact);
     return { src, p5: p(5), p10: p(10), half: p(21.0975), mar, thr, easyLo: mar * 1.10, easyHi: mar * 1.25,
-      race: g.targetSec > 0 ? g.targetSec / D.exact : predicted / D.exact, predicted: src === 'ref' ? predicted : null };
+      race: g.targetSec > 0 ? g.targetSec / D.exact : predicted / D.exact, predicted: src === 'target' && f === 1 ? null : predicted };
   }
 
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const r1 = v => Math.round(v);
   const rh = v => Math.round(v * 2) / 2;
 
@@ -265,6 +268,10 @@ const JC = (() => {
     const raceName = { '5': 'allure 5 km', '10': 'allure 10 km', '21.1': 'allure demi-marathon', '42.2': 'allure marathon' }[g.dist];
     const raceP = P ? ' (' + fmtPace(P.race) + ')' : '';
     const wu = lv === 0 ? 1.5 : 2, cd = lv === 0 ? 1 : 1.5;
+    const em = P ? (P.easyLo + P.easyHi) / 2 : null;
+    /* allure moyenne attendue d'une séance mixte : travail + récupérations + le reste en facile */
+    const mix = (total, workKm, workPace, recKm) => P ? (workKm * workPace + recKm * P.easyHi * 1.1 + Math.max(0, total - workKm - recKm) * em) / total : null;
+    const volF = g.adj && g.adj.vol > 0 ? clamp(g.adj.vol, 0.8, 1.2) : 1;
     const wuTxt = 'Échauffement ' + fmtKm(wu) + ' facile. ', cdTxt = ' Retour au calme ' + fmtKm(cd) + ' facile.';
 
     const INT = [[6, 400], [4, 800], [8, 400], [5, 800], [4, 1000], [6, 800], [5, 1000], [6, 1000], [5, 1200], [4, 1600]];
@@ -286,29 +293,33 @@ const JC = (() => {
     const intervals = () => fit(intervalsOf, INT, qi++), tempo = () => fit(tempoOf, TMP, qt++), specific = () => fit(specificOf, SPEC[g.dist], qs++);
     function intervalsOf([n, m]) {
       const rec = m === 400 ? '1 min 15' : m === 800 ? '2 min' : m === 1000 ? '2 min 30' : '3 min';
-      return { type: 'intervals', title: n + ' × ' + m + ' m', km: rh(wu + cd + n * m / 1000 + n * 0.25),
+      const km = rh(wu + cd + n * m / 1000 + n * 0.25);
+      return { type: 'intervals', title: n + ' × ' + m + ' m', km, pace: P && mix(km, n * m / 1000, P.p5, n * 0.25),
         desc: wuTxt + n + ' × ' + m + ' m à allure 5 km' + pc('p5') + (P ? '' : ' – dur mais contrôlé, 8/10') + ', récupération ' + rec + ' en trottinant.' + cdTxt };
     }
     function tempoOf([n, min]) {
       const work = n * min * 60 / (P ? P.thr : defThr);
-      return { type: 'tempo', title: (n > 1 ? n + ' × ' : '') + min + ' min au seuil', km: rh(wu + cd + work + (n - 1) * 0.4),
+      const km = rh(wu + cd + work + (n - 1) * 0.4);
+      return { type: 'tempo', title: (n > 1 ? n + ' × ' : '') + min + ' min au seuil', km, pace: P && mix(km, work, P.thr, (n - 1) * 0.4),
         desc: wuTxt + (n > 1 ? n + ' × ' + min + ' min' : min + ' min en continu') + ' à allure seuil' + pc('thr') + ' – confortablement dur, 7/10' +
           (n > 1 ? ', récupération 2 min en trottinant.' : '.') + cdTxt };
     }
     function specificOf([n, km]) {
       const t = n > 1 ? n + ' × ' + fmtKm(km) : fmtKm(km) + ' en continu';
-      return { type: 'specific', title: t + ' à ' + raceName, km: rh(wu + cd + n * km + (n - 1) * 0.4),
+      const tot = rh(wu + cd + n * km + (n - 1) * 0.4);
+      return { type: 'specific', title: t + ' à ' + raceName, km: tot, pace: P && mix(tot, n * km, P.race, (n - 1) * 0.4),
         desc: wuTxt + t + ' à ' + raceName + raceP + (n > 1 ? ', récupération 2 à 3 min en trottinant.' : '.') + cdTxt };
     }
     function fartlek(strides) {
       return strides
-        ? { type: 'easy', title: 'Footing + lignes droites', km: null, desc: 'Footing facile, puis 6 × 20 s en accélération progressive (récupération 40 s en marchant).' + easyTxt }
-        : { type: 'fartlek', title: 'Fartlek 8 × 1 min', km: null, desc: 'Footing facile avec, au milieu, 8 × (1 min vite / 1 min très lent). Vite = environ allure 5 km' + pc('p5') + ', sans sprinter.' };
+        ? { type: 'easy', title: 'Footing + lignes droites', km: null, pace: em, desc: 'Footing facile, puis 6 × 20 s en accélération progressive (récupération 40 s en marchant).' + easyTxt }
+        : { type: 'fartlek', title: 'Fartlek 8 × 1 min', km: null, pace: em && em * 0.97, desc: 'Footing facile avec, au milieu, 8 × (1 min vite / 1 min très lent). Vite = environ allure 5 km' + pc('p5') + ', sans sprinter.' };
     }
     function tune() {
       const [n, km] = D.km > 20 ? [2, 3] : D.km > 5 ? [3, 1] : [4, 0.4];
       const t = n + ' × ' + (km < 1 ? km * 1000 + ' m' : fmtKm(km));
-      return { type: 'specific', title: t + ' à ' + raceName, km: rh(wu + cd + n * km + (n - 1) * 0.3),
+      const tot = rh(wu + cd + n * km + (n - 1) * 0.3);
+      return { type: 'specific', title: t + ' à ' + raceName, km: tot, pace: P && mix(tot, n * km, P.race, (n - 1) * 0.3),
         desc: wuTxt + t + ' à ' + raceName + raceP + ', récupération 2 min. On garde le rythme sans se fatiguer.' + cdTxt };
     }
 
@@ -323,9 +334,9 @@ const JC = (() => {
       const add = (pos, s) => sessions.push(Object.assign({ id: 'w' + (k + 1) + 'd' + pos, date: addDays(start, pos) }, s));
 
       if (isRace) {
-        add(1, { type: 'easy', title: 'Footing facile', km: clamp(r1(hard * 0.15), 4, 10), desc: 'Footing très facile. Cette semaine, on arrive frais : dors bien et mange normalement.' + easyTxt });
-        add(3, { type: 'specific', title: 'Rappel d\'allure', km: clamp(r1(hard * 0.12), 4, 8), desc: 'Footing facile avec 4 × (1 min à ' + raceName + raceP + ' / 1 min lent) au milieu. Juste pour garder les jambes vives.' });
-        if (d >= 4) add(5, { type: 'easy', title: 'Déblocage', km: 3, desc: '15 à 20 min très faciles + 3 lignes droites de 15 s. Facultatif : le repos complet est aussi correct.' });
+        add(1, { type: 'easy', title: 'Footing facile', km: clamp(r1(hard * 0.15), 4, 10), pace: em, desc: 'Footing très facile. Cette semaine, on arrive frais : dors bien et mange normalement.' + easyTxt });
+        add(3, { type: 'specific', title: 'Rappel d\'allure', km: clamp(r1(hard * 0.12), 4, 8), pace: em && em * 0.98, desc: 'Footing facile avec 4 × (1 min à ' + raceName + raceP + ' / 1 min lent) au milieu. Juste pour garder les jambes vives.' });
+        if (d >= 4) add(5, { type: 'easy', title: 'Déblocage', km: 3, pace: em, desc: '15 à 20 min très faciles + 3 lignes droites de 15 s. Facultatif : le repos complet est aussi correct.' });
         add(6, { type: 'race', title: D.label + (g.name ? ' – ' + g.name : ''), km: D.km,
           desc: 'Jour de course ! ' + (g.targetSec > 0 ? 'Objectif : ' + fmtDur(g.targetSec) + ', soit ' + fmtPace(g.targetSec / D.exact) + '. ' : '') +
             'Pars prudemment : la première moitié doit sembler facile. Après la course, entre ton temps et tes stats Strava ici.' });
@@ -347,6 +358,7 @@ const JC = (() => {
             else { Lhard = Math.max(l, L0); L = Lhard; }
           }
         }
+        vol *= volF; L = Math.min(L * (1 + (volF - 1) / 2), Lp + 2);            // ajustement selon les séances réalisées
         L = r1(L); vol = Math.max(vol, L / 0.55);
         capKm = Math.max(5, vol * 0.34);
 
@@ -368,16 +380,18 @@ const JC = (() => {
         }
 
         // sortie longue
+        let longPace = em;
         let longDesc = 'Sortie longue à allure facile, sans regarder la montre.' + easyTxt + (L >= 14 ? ' Apporte de l\'eau et de quoi manger (gel ou collation) après 60 à 75 min.' : '');
         if (phase === 'peak' && big && lv >= 1 && D.km > 20) {
           const fin = D.km > 40 ? r1(L / 3) : clamp(r1(L / 4), 3, 6);
           longDesc += ' Termine les ' + fin + ' derniers km à ' + raceName + raceP + '.';
+          longPace = mix(L, fin, P ? P.race : 0, 0);
         }
         if (lv === 0 && k < 3) longDesc += ' Alterne course et marche au besoin.';
 
         // répartition sur la semaine
         const offs = OFFS[d], slots = offs.map(o => ({ off: o, pos: ((longPos - o) % 7 + 7) % 7, s: null }));
-        slots.find(s => s.off === 0).s = { type: 'long', title: 'Sortie longue', km: L, desc: longDesc };
+        slots.find(s => s.off === 0).s = { type: 'long', title: 'Sortie longue', km: L, pace: longPace, desc: longDesc };
         if (q[0]) slots.find(s => s.off === 5).s = q[0];
         if (q[1]) slots.find(s => s.off === 3).s = q[1];
         const fixed = slots.reduce((a, s) => a + (s.s && s.s.km ? s.s.km : 0), 0);
@@ -387,7 +401,7 @@ const JC = (() => {
         for (const s of free) {
           const km = clamp(r1((vol - fixed) * (s.off === 1 ? 0.8 : 1) / wsum), s.off === 1 ? 3 : emin, emax);
           if (s.s) s.s.km = km;
-          else s.s = { type: 'easy', title: 'Footing facile', km, desc: 'Footing en aisance respiratoire : tu dois pouvoir parler.' + easyTxt + (lv === 0 && k < 3 ? ' Alterne course et marche au besoin.' : '') };
+          else s.s = { type: 'easy', title: 'Footing facile', km, pace: em, desc: 'Footing en aisance respiratoire : tu dois pouvoir parler.' + easyTxt + (lv === 0 && k < 3 ? ' Alterne course et marche au besoin.' : '') };
         }
         slots.forEach(s => add(s.pos, s.s));
       }
@@ -400,7 +414,7 @@ const JC = (() => {
     if (N < MINW[g.dist]) warnings.push('Délai court pour un ' + D.label.toLowerCase() + ' : on conseille au moins ' + MINW[g.dist] + ' semaines. Le plan est comprimé ; reste prudent.');
     if (M > 0 && Lhard < Lp * 0.8) warnings.push('Le temps disponible ne permet pas d\'atteindre la sortie longue idéale (' + Lp + ' km). Le plan monte jusqu\'à ' + r1(Lhard) + ' km.');
     if (P && P.predicted && g.targetSec > 0 && g.targetSec < P.predicted * 0.93)
-      warnings.push('Objectif ambitieux : ta performance récente équivaut à environ ' + fmtDur(P.predicted) + ' sur la distance. Les allures d\'entraînement sont basées sur ta forme actuelle.');
+      warnings.push('Objectif ambitieux : ta forme actuelle équivaut à environ ' + fmtDur(P.predicted) + ' sur la distance. Les allures d\'entraînement sont basées sur ta forme actuelle.');
 
     return { kind: 'plan', goal: Object.assign({}, g, { level: lv, days: d }), paces: P, weeks, warnings };
   }
@@ -449,6 +463,93 @@ const JC = (() => {
     };
   }
 
+  // ---------- ajustement automatique du plan ----------
+  const median = a => { const b = a.slice().sort((x, y) => x - y), m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
+  const pct = f => fmtNum(Math.abs(f - 1) * 100) + ' %';
+
+  /* Compare les séances réalisées depuis le dernier ajustement à ce que le plan attendait.
+     Retourne null (rien à changer) ou { pace, vol, learnedEasy, reasons }.
+     `missed` : tenir compte aussi des séances manquées (vérifié à l'ouverture, pas pendant qu'on entre ses séances). */
+  function evaluate(plan, missed) {
+    const g = plan.goal, t = today(), adj = g.adj || {}, since = adj.at || '';
+    if (diffDays(g.raceDate, t) < 10) return null;                       // on ne touche plus à l'affûtage
+    let ref; try { ref = generatePlan(g); } catch (e) { return null; }
+    const exp = new Map(); ref.weeks.forEach(w => w.sessions.forEach(s => exp.set(s.id, s)));
+    const es = entries(plan).filter(e => e.s.type !== 'race' && e.s.date > since);
+    const recent = es.filter(e => e.done).slice(-6);
+    const timed = recent.filter(e => e.log.distance > 0 && e.log.duration > 0);
+    const feels = recent.filter(e => e.log.feel > 0).map(e => e.log.feel);
+    const feel = feels.length ? feels.reduce((a, b) => a + b, 0) / feels.length : 3;
+    const hard = feels.length >= 3 && feel <= 2;
+    let pace = adj.pace > 0 ? adj.pace : 1, vol = adj.vol > 0 ? adj.vol : 1, learnedEasy = g.learnedEasy || 0;
+    const reasons = [];
+
+    // allures
+    if (!ref.paces) {
+      const easy = timed.filter(e => e.s.type === 'easy' || e.s.type === 'long').map(e => e.log.duration / e.log.distance).filter(p => p > 150 && p < 900);
+      if (easy.length >= 3) { learnedEasy = Math.round(median(easy)); reasons.push('Allures calculées à partir de tes sorties faciles (' + fmtPace(learnedEasy) + ').'); }
+    } else {
+      const ratios = timed.map(e => { const x = exp.get(e.s.id); return x && x.pace > 0 ? (e.log.duration / e.log.distance) / x.pace : 0; }).filter(r => r > 0.6 && r < 1.6);
+      if (hard) { pace *= 1.02; reasons.push('Tes dernières séances étaient très dures : allures ralenties de 2 %.'); }
+      else if (ratios.length >= 3) {
+        const med = median(ratios);
+        if (med <= 0.97 && feel >= 3) { const st = clamp((1 - med) / 2, 0.01, 0.03); pace *= 1 - st; reasons.push('Tu cours plus vite que prévu en te sentant bien : allures accélérées de ' + pct(1 - st) + '.'); }
+        else if (med >= 1.04 && feel <= 3.5) { const st = clamp((med - 1) / 2, 0.01, 0.03); pace *= 1 + st; reasons.push('Tes séances sont plus lentes que prévu : allures ralenties de ' + pct(1 + st) + '.'); }
+      }
+    }
+
+    // volume
+    const lim = addDays(t, -2), from = addDays(t, -21);                 // 2 jours de grâce pour entrer ses séances
+    const due = es.filter(e => e.s.date <= lim && e.s.date >= from), doneDue = due.filter(e => e.done);
+    const withKm = recent.filter(e => e.log.distance > 0);
+    const kmRatio = withKm.length >= 3 ? withKm.reduce((a, e) => a + e.log.distance, 0) / withKm.reduce((a, e) => a + e.s.km, 0) : 1;
+    const completion = due.length ? doneDue.length / due.length : 1;
+    if (hard || (missed && due.length >= 4 && completion < 0.6)) {
+      vol *= 0.92; reasons.push((hard ? 'Pour récupérer' : 'Plusieurs séances manquées') + ' : volume des prochaines semaines réduit de 8 %.');
+    } else if (recent.length >= 3 && completion >= 0.85 && feel >= 3) {
+      let up = 0;
+      if (kmRatio >= 1.08) up = clamp((kmRatio - 1) / 2, 0.03, 0.08);
+      else if (feels.length >= 3 && feel >= 4.5) up = 0.04;
+      if (up) { vol *= 1 + up; reasons.push((kmRatio >= 1.08 ? 'Tu cours plus de km que prévu' : 'Tes séances passent très bien') + ' : volume des prochaines semaines augmenté de ' + pct(1 + up) + '.'); }
+    }
+
+    pace = clamp(pace, 0.85, 1.12); vol = clamp(vol, 0.8, 1.2);
+    const same = Math.abs(pace - (adj.pace || 1)) < 1e-4 && Math.abs(vol - (adj.vol || 1)) < 1e-4 && learnedEasy === (g.learnedEasy || 0);
+    return same || !reasons.length ? null : { pace, vol, learnedEasy, reasons };
+  }
+
+  /* Regénère le plan avec ces réglages et remplace seulement les séances à venir non cochées. */
+  function rebuild(plan, goal, entry) {
+    const fresh = generatePlan(goal), t = today();
+    const weeks = plan.weeks.map((w, i) => {
+      const nw = fresh.weeks[i] || { sessions: [] };
+      const sessions = w.sessions.map(s => {
+        const l = getLog(plan.id, s.id);
+        return s.date > t && !(l && l.done) ? (nw.sessions.find(x => x.id === s.id) || s) : s;
+      });
+      return Object.assign({}, w, { sessions, km: Math.round(sessions.reduce((a, s) => a + s.km, 0) * 10) / 10 });
+    });
+    return put(Object.assign({}, plan, { goal, paces: fresh.paces, warnings: fresh.warnings, weeks, history: (plan.history || []).concat([entry]).slice(-20) }));
+  }
+
+  function autoAdjust(missed) {
+    const plan = activePlan();
+    if (!plan || plan.goal.auto === false) return null;
+    const ev = evaluate(plan, missed); if (!ev) return null;
+    const old = plan.goal.adj || {};
+    const goal = Object.assign({}, plan.goal, { adj: { pace: ev.pace, vol: ev.vol, at: today() }, learnedEasy: ev.learnedEasy });
+    rebuild(plan, goal, { at: today(), text: ev.reasons.join(' '), from: { pace: old.pace || 1, vol: old.vol || 1, learnedEasy: plan.goal.learnedEasy || 0 } });
+    return ev.reasons.join(' ');
+  }
+  function undoAdjust() {
+    const plan = activePlan(), h = plan && (plan.history || []).slice(-1)[0];
+    if (!h || !h.from) return false;
+    const goal = Object.assign({}, plan.goal, { adj: { pace: h.from.pace, vol: h.from.vol, at: today() }, learnedEasy: h.from.learnedEasy || 0 });
+    rebuild(plan, goal, { at: today(), text: 'Dernier ajustement annulé.' });
+    return true;
+  }
+  function setAuto(on) { const plan = activePlan(); if (plan) put(Object.assign({}, plan, { goal: Object.assign({}, plan.goal, { auto: !!on }) })); }
+
   function toCSV(plan) {
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     const rows = [['date', 'semaine', 'seance', 'type', 'km_prevus', 'completee', 'distance_km', 'temps_s', 'allure', 'fc_moy', 'denivele_m', 'ressenti', 'lien', 'note'].join(',')];
@@ -471,7 +572,7 @@ const JC = (() => {
 
   return { init, connect, disconnect, connected, login, repo, sync, onChange: f => listeners.push(f), status: () => status,
     DIST, LEVELS, DAYS, PHASES, TYPES, DEF_WEEKLY, DEFAULT_REPO,
-    generatePlan, computePaces, plans, activePlan, createPlan, deletePlan, getLog, saveLog, setDone, hasStats, clearStats, entries, summary, toCSV,
+    generatePlan, computePaces, plans, activePlan, createPlan, deletePlan, getLog, saveLog, setDone, hasStats, clearStats, entries, summary, toCSV, evaluate, autoAdjust, undoAdjust, setAuto,
     esc, uid, today, toDate, addDays, diffDays, weekday, fmtDate, fmtDay, fmtShort, fmtNum, fmtKm, fmtDur, fmtClock, fmtPace, num, hms, splitHms,
     _merge: merge, _reset: () => { data = blank(); } };
 })();
