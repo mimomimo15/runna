@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stats – Plan de course</title>
+<meta name="theme-color" content="#3b5bdb">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Course">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Plan de course <small id="who"></small></h1>
+    <nav class="tabs">
+      <a class="btn" href="index.html">Plan</a>
+      <a class="btn active" href="stats.html">Stats</a>
+    </nav>
+  </header>
+  <div id="sync" role="status"></div>
+
+  <div class="card empty hidden" id="need-login">Connecte d'abord ton plan sur la page <a href="index.html">Plan</a>.</div>
+  <div class="card empty hidden" id="need-data">Pas encore de plan. Crée ton objectif sur la page <a href="index.html">Plan</a> et tes stats apparaîtront ici.</div>
+
+  <div id="stats" class="hidden">
+    <section class="card hidden" id="race"></section>
+    <div class="tiles" id="tiles"></div>
+
+    <section class="card">
+      <h2>Kilomètres par semaine</h2>
+      <p class="muted small" style="margin:-4px 0 0">Prévu par le plan et réellement couru (distance entrée, sinon distance prévue des séances cochées).</p>
+      <div class="chartbox"><canvas id="chart" role="img" aria-label="Kilomètres prévus et courus par semaine"></canvas></div>
+    </section>
+
+    <section class="card">
+      <h2>Séances complétées</h2>
+      <div class="tablewrap">
+        <table class="rt"><thead><tr><th>Séance</th><th>Distance</th><th>Temps</th><th>Allure</th><th>FC moy.</th><th>D+</th><th>Ressenti</th></tr></thead><tbody id="rows"></tbody></table>
+      </div>
+      <p class="muted small hidden" id="no-rows" style="margin:8px 0 0">Aucune séance cochée pour l'instant.</p>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="app.js"></script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const esc = JC.esc;
+let chart = null;
+
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function render() {
+  const on = JC.connected(), plan = on ? JC.activePlan() : null;
+  $('who').textContent = on ? JC.login() : '';
+  const s = JC.status(), el = $('sync');
+  const txt = { idle: '', loading: 'Chargement…', saving: 'Enregistrement…', ok: 'Synchronisé ✓', offline: 'Hors ligne.', error: '⚠ ' + s.msg };
+  el.textContent = on ? (txt[s.state] || '') : ''; el.className = s.state === 'error' ? 'error' : s.state === 'ok' ? 'ok' : '';
+  $('need-login').classList.toggle('hidden', on);
+  $('need-data').classList.toggle('hidden', !on || !!plan);
+  $('stats').classList.toggle('hidden', !plan);
+  if (!plan) return;
+
+  const sum = JC.summary(plan), es = JC.entries(plan), g = plan.goal, D = JC.DIST[g.dist];
+  const tile = (k, v, sub) => '<div class="tile"><div class="k">' + k + '</div><div class="v">' + esc(v) + '</div><div class="s">' + esc(sub || '') + '</div></div>';
+  $('tiles').innerHTML =
+    tile('Séances complétées', sum.done + ' / ' + sum.total, sum.due ? Math.round(100 * Math.min(sum.done, sum.due) / sum.due) + ' % des séances prévues jusqu\'ici' : 'première séance à venir') +
+    tile('Kilomètres courus', JC.fmtKm(sum.km), 'sur ' + JC.fmtKm(sum.plannedKm) + ' au plan') +
+    tile('Cette semaine', sum.week ? JC.fmtKm(sum.weekDone) : '–', sum.week ? 'sur ' + JC.fmtKm(sum.week.km) + ' prévus' : 'hors plan') +
+    tile('Plus longue sortie', sum.longest ? JC.fmtKm(sum.longest) : '–', sum.daysLeft >= 0 ? 'course dans ' + sum.daysLeft + ' jour' + (sum.daysLeft > 1 ? 's' : '') : 'course passée');
+
+  // résultat de la course
+  const r = sum.race, rl = r && r.log;
+  $('race').classList.toggle('hidden', !(r && r.done));
+  if (r && r.done) {
+    let h = '<h2>Résultat – ' + esc(r.s.title) + '</h2>';
+    if (rl.duration > 0) {
+      const dist = rl.distance > 0 ? rl.distance : D.exact;
+      h += '<div class="result">' + esc(JC.fmtDur(rl.duration)) + '</div><div class="muted small">' + esc(JC.fmtPace(rl.duration / dist)) + ' · ' + esc(JC.fmtDate(r.s.date, true)) + '</div>';
+      if (g.targetSec > 0) {
+        const diff = rl.duration - g.targetSec;
+        h += '<p style="margin:8px 0 0">' + (diff <= 0 ? 'Objectif atteint 🎉 – ' + esc(JC.fmtClock(-diff)) + ' sous l\'objectif' : esc(JC.fmtClock(diff)) + ' au-dessus de l\'objectif') + ' (' + esc(JC.fmtDur(g.targetSec)) + ').</p>';
+      }
+    } else h += '<p class="muted" style="margin:0">Course complétée. Ajoute ton temps sur la page <a href="index.html">Plan</a> pour voir ton résultat ici.</p>';
+    $('race').innerHTML = h;
+  }
+
+  // tableau
+  const done = es.filter(e => e.done).sort((a, b) => a.s.date < b.s.date ? 1 : -1);
+  $('no-rows').classList.toggle('hidden', done.length > 0);
+  $('rows').innerHTML = done.map(e => {
+    const l = e.log, has = l.distance > 0;
+    const c = (label, v) => '<td data-label="' + label + '">' + esc(v) + '</td>';
+    return '<tr><td>' + esc(e.s.title) + '<span class="d">' + esc(JC.fmtDate(e.s.date)) + ' · ' + esc(JC.TYPES[e.s.type] || '') + '</span></td>' +
+      c('Distance', JC.fmtKm(e.km) + (has ? '' : ' (prévu)')) + c('Temps', l.duration > 0 ? JC.fmtClock(l.duration) : '–') +
+      c('Allure', has && l.duration > 0 ? JC.fmtPace(l.duration / l.distance) : '–') + c('FC moy.', l.hr > 0 ? l.hr + ' bpm' : '–') +
+      c('D+', l.elev > 0 ? l.elev + ' m' : '–') + c('Ressenti', l.feel > 0 ? l.feel + '/5' : '–') + '</tr>';
+  }).join('');
+
+  // graphique
+  if (typeof Chart === 'undefined') return;
+  const labels = plan.weeks.map(w => 'S' + w.n);
+  const planned = plan.weeks.map(w => w.km);
+  const ran = plan.weeks.map(w => Math.round(es.filter(e => e.week === w).reduce((a, e) => a + e.km, 0) * 10) / 10);
+  const muted = css('--muted'), line = css('--line');
+  if (chart) chart.destroy();
+  chart = new Chart($('chart'), {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label: 'Prévu', data: planned, backgroundColor: line, borderRadius: 3 },
+      { label: 'Couru', data: ran, backgroundColor: css('--ok'), borderRadius: 3 }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { labels: { color: muted, boxWidth: 12 } },
+        tooltip: { callbacks: { title: items => { const w = plan.weeks[items[0].dataIndex]; return 'Semaine ' + w.n + ' · ' + JC.fmtShort(w.start) + ' – ' + JC.fmtShort(w.end); },
+          label: c => c.dataset.label + ' : ' + JC.fmtKm(c.parsed.y) } } },
+      scales: { x: { ticks: { color: muted, maxRotation: 0, autoSkip: true }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { color: muted }, grid: { color: line }, title: { display: true, text: 'km', color: muted } } }
+    }
+  });
+}
+
+JC.onChange(render);
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+JC.init();
+render();
+</script>
+</body>
+</html>

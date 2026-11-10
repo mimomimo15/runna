@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Plan de course</title>
+<meta name="theme-color" content="#3b5bdb">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Course">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Plan de course <small id="who"></small></h1>
+    <nav class="tabs">
+      <a class="btn active" href="index.html">Plan</a>
+      <a class="btn" href="stats.html">Stats</a>
+      <button class="btn hidden" id="btn-install" type="button">Installer l'app</button>
+      <button class="btn hidden" id="btn-account" type="button">Compte</button>
+    </nav>
+  </header>
+  <div id="sync" role="status"></div>
+
+  <!-- Connexion -->
+  <section class="card hidden" id="setup">
+    <h2>Connecte ton plan</h2>
+    <p class="muted small">Ton plan et tes séances sont gardés dans <b>ton</b> dépôt privé GitHub. Personne d'autre ne les voit. À faire une seule fois par appareil :</p>
+    <ol class="steps">
+      <li>Crée un compte <a href="https://github.com/signup" target="_blank" rel="noopener">GitHub</a> (gratuit) si tu n'en as pas.</li>
+      <li><a href="https://github.com/new?name=journal-course&visibility=private" target="_blank" rel="noopener">Crée un dépôt <b>privé</b></a> nommé <code>journal-course</code> (laisse-le vide).</li>
+      <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Crée un jeton « fine-grained »</a> : <i>Repository access</i> → <i>Only select repositories</i> → <code>journal-course</code> ; <i>Permissions</i> → <i>Contents</i> → <b>Read and write</b>. Choisis une longue expiration.</li>
+      <li>Colle le jeton ici. Il reste dans ce navigateur ; ne le partage avec personne.</li>
+    </ol>
+    <form id="setup-form">
+      <label class="f" for="in-token">Jeton GitHub</label>
+      <input id="in-token" type="password" autocomplete="off" placeholder="github_pat_…">
+      <details>
+        <summary>Mon dépôt ne s'appelle pas « journal-course »</summary>
+        <label class="f" for="in-repo">Dépôt (compte/nom)</label>
+        <input id="in-repo" type="text" autocomplete="off" placeholder="mon-compte/journal-course">
+      </details>
+      <div class="row" style="margin-top:10px"><button class="btn primary" id="btn-connect" type="submit">Connecter</button></div>
+      <div class="err" id="setup-err"></div>
+    </form>
+  </section>
+
+  <!-- Compte -->
+  <section class="card hidden" id="account">
+    <h2>Compte</h2>
+    <p class="small muted" id="account-info"></p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn small hidden" id="btn-csv" type="button">Exporter en CSV</button>
+      <button class="btn small danger hidden" id="btn-delplan" type="button">Supprimer le plan</button>
+      <button class="btn small danger" id="btn-logout" type="button">Se déconnecter de cet appareil</button>
+    </div>
+  </section>
+
+  <!-- Objectif -->
+  <section class="card hidden" id="goal">
+    <h2>Ton objectif</h2>
+    <p class="muted small" style="margin-top:-4px">Dis-moi ta course et où tu en es : le plan est construit semaine par semaine jusqu'au jour J.</p>
+    <form id="goal-form">
+      <div class="grid2e fld">
+        <div><label class="f" for="g-dist">Distance</label>
+          <select id="g-dist"><option value="5">5 km</option><option value="10">10 km</option><option value="21.1" selected>Demi-marathon</option><option value="42.2">Marathon</option></select></div>
+        <div><label class="f" for="g-name">Nom (optionnel)</label><input id="g-name" type="text" autocomplete="off" placeholder="ex. Demi de Montréal"></div>
+      </div>
+      <div class="grid2e fld">
+        <div><label class="f" for="g-race">Date de la course</label><input id="g-race" type="date"></div>
+        <div><label class="f" for="g-start">Début du plan</label><input id="g-start" type="date"></div>
+      </div>
+      <div class="grid3 fld">
+        <div><label class="f" for="g-level">Niveau</label>
+          <select id="g-level"><option value="0">Débutant – je cours peu ou pas</option><option value="1">Intermédiaire – je cours régulièrement</option><option value="2">Avancé – je m'entraîne depuis des années</option></select></div>
+        <div><label class="f" for="g-days">Jours de course par semaine</label>
+          <select id="g-days"><option>3</option><option selected>4</option><option>5</option><option>6</option></select></div>
+        <div><label class="f" for="g-weekly">Km par semaine en ce moment</label><input id="g-weekly" type="text" inputmode="decimal" autocomplete="off" placeholder="10"></div>
+      </div>
+      <div class="fld"><label class="f" for="g-long">Jour de la sortie longue</label>
+        <select id="g-long" style="max-width:260px"><option value="">Même jour que la course</option><option value="0">Lundi</option><option value="1">Mardi</option><option value="2">Mercredi</option><option value="3">Jeudi</option><option value="4">Vendredi</option><option value="5">Samedi</option><option value="6">Dimanche</option></select></div>
+
+      <fieldset>
+        <legend>Allures (optionnel)</legend>
+        <p class="muted small" style="margin:4px 0 0">Avec un temps visé ou une performance récente, chaque séance affiche l'allure à tenir. Sinon, le plan se fie aux sensations.</p>
+        <div class="fld"><label class="f">Temps visé pour la course (h · min · s)</label>
+          <div class="hms"><input id="g-th" type="text" inputmode="numeric" placeholder="h" aria-label="Temps visé : heures"><input id="g-tm" type="text" inputmode="numeric" placeholder="min" aria-label="Temps visé : minutes"><input id="g-ts" type="text" inputmode="numeric" placeholder="s" aria-label="Temps visé : secondes"></div></div>
+        <div class="fld"><label class="f" for="g-refd">Performance récente (course ou effort maximal)</label>
+          <div><select id="g-refd" style="max-width:260px;margin-bottom:6px"><option value="">—</option><option value="5">5 km</option><option value="10">10 km</option><option value="21.1">Demi-marathon</option><option value="42.2">Marathon</option></select>
+          <div class="hms"><input id="g-rh" type="text" inputmode="numeric" placeholder="h" aria-label="Performance : heures"><input id="g-rm" type="text" inputmode="numeric" placeholder="min" aria-label="Performance : minutes"><input id="g-rs" type="text" inputmode="numeric" placeholder="s" aria-label="Performance : secondes"></div></div></div>
+      </fieldset>
+
+      <div class="err" id="goal-err"></div>
+      <div class="row" style="margin-top:14px"><button class="btn primary" type="submit">Créer mon plan</button></div>
+    </form>
+  </section>
+
+  <!-- Plan -->
+  <section id="plan" class="hidden">
+    <div class="card hero" id="hero"></div>
+    <div class="card next hidden" id="next"></div>
+    <div id="weeks"></div>
+  </section>
+
+  <!-- Stats d'une séance -->
+  <section class="card hidden" id="log">
+    <h2 id="log-title">Stats de la séance</h2>
+    <p class="muted small" id="log-plan" style="margin-top:-4px"></p>
+    <p class="muted small">Recopie les chiffres de ton activité Strava. Tout est optionnel.</p>
+    <div class="grid2e fld">
+      <div><label class="f" for="l-dist">Distance (km) – vide = distance prévue</label><input id="l-dist" type="text" inputmode="decimal" autocomplete="off"></div>
+      <div><label class="f">Temps (h · min · s)</label>
+        <div class="hms"><input id="l-h" type="text" inputmode="numeric" placeholder="h" aria-label="Heures"><input id="l-m" type="text" inputmode="numeric" placeholder="min" aria-label="Minutes"><input id="l-s" type="text" inputmode="numeric" placeholder="s" aria-label="Secondes"></div></div>
+    </div>
+    <p class="small" id="l-pace" style="margin:8px 0 0;min-height:1.2em"></p>
+    <div class="grid3 fld">
+      <div><label class="f" for="l-hr">Fréquence cardiaque moy. (bpm)</label><input id="l-hr" type="text" inputmode="numeric" autocomplete="off"></div>
+      <div><label class="f" for="l-elev">Dénivelé positif (m)</label><input id="l-elev" type="text" inputmode="numeric" autocomplete="off"></div>
+      <div><label class="f" for="l-feel">Ressenti</label>
+        <select id="l-feel"><option value="0">—</option><option value="1">1 – Très dur</option><option value="2">2 – Dur</option><option value="3">3 – Correct</option><option value="4">4 – Bien</option><option value="5">5 – Super</option></select></div>
+    </div>
+    <div class="fld"><label class="f" for="l-url">Lien de l'activité Strava (optionnel)</label><input id="l-url" type="url" inputmode="url" autocomplete="off" placeholder="https://www.strava.com/activities/…"></div>
+    <div class="fld"><label class="f" for="l-note">Note (optionnel)</label><textarea id="l-note" placeholder="Comment ça s'est passé ?"></textarea></div>
+    <div class="err" id="log-err"></div>
+    <div class="editor-actions">
+      <div class="row"><button class="btn primary" id="btn-log-save" type="button">Enregistrer</button><button class="btn" id="btn-log-cancel" type="button">Annuler</button></div>
+      <button class="btn danger hidden" id="btn-log-clear" type="button">Effacer les stats</button>
+    </div>
+  </section>
+</div>
+
+<script src="app.js"></script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const esc = JC.esc;
+let showAccount = false;
+let editing = null;            // identifiant de la séance dont on entre les stats
+let scrollBack = 0;
+const openWeeks = new Set();   // semaines dépliées / repliées à la main
+const closedWeeks = new Set();
+
+/* ---------- affichage général ---------- */
+function render() {
+  const on = JC.connected(), plan = on ? JC.activePlan() : null;
+  if (editing && !(plan && findSession(plan, editing))) editing = null;
+  $('setup').classList.toggle('hidden', on);
+  $('btn-account').classList.toggle('hidden', !on);
+  $('account').classList.toggle('hidden', !on || !showAccount || !!editing);
+  $('goal').classList.toggle('hidden', !on || !!plan);
+  $('plan').classList.toggle('hidden', !plan || !!editing);
+  $('log').classList.toggle('hidden', !editing);
+  document.body.classList.toggle('editing', !!editing);
+  $('who').textContent = on ? JC.login() : '';
+  renderSync();
+  if (!on) return;
+  $('account-info').textContent = 'Connecté : ' + JC.login() + ' · données dans le dépôt privé ' + JC.repo();
+  $('btn-csv').classList.toggle('hidden', !plan);
+  $('btn-delplan').classList.toggle('hidden', !plan);
+  if (plan && !editing) renderPlan(plan);
+}
+
+function renderSync() {
+  const s = JC.status(), el = $('sync');
+  const txt = { idle: '', loading: 'Chargement…', saving: 'Enregistrement…', ok: 'Synchronisé ✓',
+    offline: 'Hors ligne – tes changements sont gardés ici et seront envoyés au retour du réseau.', error: '⚠ ' + s.msg };
+  el.textContent = JC.connected() ? (txt[s.state] || '') : '';
+  el.className = s.state === 'error' ? 'error' : s.state === 'ok' ? 'ok' : '';
+}
+
+function findSession(plan, id) {
+  for (const w of plan.weeks) for (const s of w.sessions) if (s.id === id) return s;
+  return null;
+}
+
+/* ---------- plan ---------- */
+function gotLine(l) {
+  if (!JC.hasStats(l)) return '';
+  const parts = [];
+  if (l.distance > 0) parts.push(JC.fmtKm(l.distance));
+  if (l.duration > 0) parts.push(JC.fmtClock(l.duration));
+  if (l.distance > 0 && l.duration > 0) parts.push(JC.fmtPace(l.duration / l.distance));
+  if (l.hr > 0) parts.push(l.hr + ' bpm');
+  if (l.elev > 0) parts.push('D+ ' + l.elev + ' m');
+  if (l.feel > 0) parts.push('ressenti ' + l.feel + '/5');
+  let h = parts.length ? '<p class="got">' + esc(parts.join(' · ')) + '</p>' : '';
+  if (l.note) h += '<p class="got" style="white-space:pre-wrap">' + esc(l.note) + '</p>';
+  if (/^https:\/\//i.test(l.url || '')) h += '<p><a href="' + esc(l.url) + '" target="_blank" rel="noopener">Voir sur Strava</a></p>';
+  return h;
+}
+
+function sessionHTML(e, opts) {
+  const s = e.s, t = JC.today(), big = opts && opts.big;
+  const when = s.date === t ? 'Aujourd\'hui' : s.date === JC.addDays(t, 1) ? 'Demain' : JC.fmtDay(s.date);
+  const check = big
+    ? ''
+    : '<button class="check' + (e.done ? ' on' : '') + '" type="button" data-act="toggle" data-s="' + esc(s.id) + '" aria-pressed="' + e.done + '" aria-label="' + (e.done ? 'Complétée – toucher pour annuler' : 'Marquer comme complétée') + '" title="' + (e.done ? 'Complétée' : 'Marquer comme complétée') + '">✓</button>';
+  const statsBtn = '<button class="btn small" type="button" data-act="log" data-s="' + esc(s.id) + '">' +
+    (JC.hasStats(e.log) ? 'Modifier les stats' : s.type === 'race' ? '＋ Résultat de la course' : '＋ Stats Strava') + '</button>';
+  const body = '<div><div class="when">' + esc(when) + '</div>' +
+    '<h4>' + esc(s.title) + ' <span>· ' + esc(JC.fmtKm(s.km)) + '</span></h4>' +
+    '<span class="tag t-' + esc(s.type) + '">' + esc(JC.TYPES[s.type] || s.type) + '</span>' +
+    '<p class="desc">' + esc(s.desc) + '</p>' + gotLine(e.log) +
+    '<div class="acts row">' +
+      (big ? '<button class="check big' + (e.done ? ' on' : '') + '" type="button" data-act="toggle" data-s="' + esc(s.id) + '" aria-pressed="' + e.done + '">✓ ' + (e.done ? 'Complétée' : 'Marquer comme complétée') + '</button>' : '') +
+      (e.done || big || s.date <= t ? statsBtn : '') + '</div></div>';
+  return '<div class="ses' + (e.done ? ' done' : '') + (s.date === t && !big ? ' today' : '') + '"' + (big ? ' style="grid-template-columns:1fr"' : '') + '>' + check + body + '</div>';
+}
+
+function renderPlan(plan) {
+  const g = plan.goal, D = JC.DIST[g.dist], sum = JC.summary(plan), es = JC.entries(plan), t = JC.today();
+  const pct = sum.total ? Math.round(100 * sum.done / sum.total) : 0;
+  const when = sum.daysLeft > 1 ? 'Dans ' + sum.daysLeft + ' jours' : sum.daysLeft === 1 ? 'Demain' : sum.daysLeft === 0 ? 'Aujourd\'hui !' : 'Course passée';
+  const P = plan.paces;
+  let hero = '<h2>' + esc(D.label) + (g.name ? ' – ' + esc(g.name) : '') + '</h2>' +
+    '<div class="muted small">' + esc(JC.fmtDate(g.raceDate, true)) + ' · ' + when +
+    (sum.week ? ' · semaine ' + sum.week.n + ' de ' + plan.weeks.length + ' (' + JC.PHASES[sum.week.phase].toLowerCase() + ')' : '') + '</div>' +
+    '<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><i style="width:' + pct + '%"></i></div>' +
+    '<div class="small muted">' + sum.done + ' séance' + (sum.done > 1 ? 's' : '') + ' complétée' + (sum.done > 1 ? 's' : '') + ' sur ' + sum.total + ' · ' + esc(JC.fmtKm(sum.km)) + ' courus</div>';
+  if (g.targetSec > 0) hero += '<div class="small" style="margin-top:8px">Objectif : <b>' + esc(JC.fmtDur(g.targetSec)) + '</b> (' + esc(JC.fmtPace(g.targetSec / D.exact)) + ')</div>';
+  if (P) {
+    const row = (k, v) => '<div>' + k + '<b>' + esc(v) + '</b></div>';
+    hero += '<details><summary>Tes allures d\'entraînement</summary><div class="paces">' +
+      row('Facile / longue', JC.fmtPace(P.easyLo).replace('/km', '') + ' à ' + JC.fmtPace(P.easyHi)) +
+      row('Allure course', JC.fmtPace(P.race)) + row('Seuil', JC.fmtPace(P.thr)) + row('Intervalles (5 km)', JC.fmtPace(P.p5)) + '</div>' +
+      (P.predicted ? '<p class="muted small" style="margin:8px 0 0">Ta performance récente équivaut à environ ' + esc(JC.fmtDur(P.predicted)) + ' sur ' + esc(D.label.toLowerCase()) + ' (estimation).</p>' : '') + '</details>';
+  }
+  (plan.warnings || []).forEach(w => { hero += '<div class="warn">' + esc(w) + '</div>'; });
+  $('hero').innerHTML = hero;
+
+  const nx = sum.next;
+  $('next').classList.toggle('hidden', !nx);
+  if (nx) $('next').innerHTML = '<h2>Prochaine séance</h2>' + sessionHTML(nx, { big: true });
+
+  let html = '';
+  for (const w of plan.weeks) {
+    const we = es.filter(e => e.week === w), nd = we.filter(e => e.done).length;
+    const now = t >= w.start && t <= w.end, complete = we.length > 0 && nd === we.length;
+    const open = openWeeks.has(w.n) || (!closedWeeks.has(w.n) && (now || (!sum.week && w === plan.weeks[0] && t < w.start)));
+    html += '<details class="card week' + (now ? ' now' : '') + (complete ? ' complete' : '') + '" data-w="' + w.n + '"' + (open ? ' open' : '') + '>' +
+      '<summary><span><b>Semaine ' + w.n + (now ? ' · en cours' : '') + '</b><span class="muted small">' + esc(JC.fmtShort(w.start)) + ' – ' + esc(JC.fmtShort(w.end)) + ' · ' + esc(JC.PHASES[w.phase]) + '</span></span>' +
+      '<span class="meta small"><span class="muted">' + esc(JC.fmtKm(w.km)) + '</span><br>' + nd + '/' + we.length + ' ✓</span></summary>' +
+      we.map(e => sessionHTML(e)).join('') + '</details>';
+  }
+  $('weeks').innerHTML = html;
+}
+
+$('plan').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const plan = JC.activePlan(); if (!plan) return;
+  const id = b.dataset.s;
+  if (b.dataset.act === 'toggle') {
+    const l = JC.getLog(plan.id, id);
+    JC.setDone(plan.id, id, !(l && l.done));
+    render();
+  } else if (b.dataset.act === 'log') openLog(id);
+});
+$('weeks').addEventListener('toggle', e => {
+  const n = +(e.target.dataset && e.target.dataset.w); if (!n) return;
+  if (e.target.open) { openWeeks.add(n); closedWeeks.delete(n); } else { closedWeeks.add(n); openWeeks.delete(n); }
+}, true);
+
+/* ---------- stats d'une séance ---------- */
+function openLog(id) {
+  const plan = JC.activePlan(), s = plan && findSession(plan, id); if (!s) return;
+  const l = JC.getLog(plan.id, id) || {};
+  scrollBack = window.scrollY; editing = id;
+  $('log-title').textContent = s.type === 'race' ? 'Résultat de la course' : 'Stats de la séance';
+  $('log-plan').textContent = JC.fmtDate(s.date, true) + ' · ' + s.title + ' · prévu ' + JC.fmtKm(s.km);
+  $('l-dist').value = l.distance > 0 ? String(l.distance).replace('.', ',') : '';
+  $('l-dist').placeholder = String(s.km).replace('.', ',');
+  const t = JC.splitHms(l.duration); $('l-h').value = t[0] || ''; $('l-m').value = l.duration > 0 ? t[1] : ''; $('l-s').value = l.duration > 0 ? t[2] : '';
+  $('l-hr').value = l.hr > 0 ? l.hr : ''; $('l-elev').value = l.elev > 0 ? l.elev : ''; $('l-feel').value = String(l.feel || 0);
+  $('l-url').value = l.url || ''; $('l-note').value = l.note || ''; $('log-err').textContent = '';
+  $('btn-log-clear').classList.toggle('hidden', !JC.hasStats(l));
+  updatePace(); render(); window.scrollTo(0, 0);
+}
+function closeLog() { editing = null; render(); window.scrollTo(0, scrollBack); }
+
+function readLog() {
+  const txt = id => $(id).value.trim();
+  let distance = txt('l-dist') ? JC.num(txt('l-dist')) : 0;
+  if (!(distance >= 0) || distance > 500) throw new Error('Distance invalide.');
+  const duration = JC.hms($('l-h').value, $('l-m').value, $('l-s').value);
+  if (isNaN(duration)) throw new Error('Temps invalide : entre des nombres.');
+  if (!distance && duration > 0) {                       // temps sans distance : on prend la distance prévue
+    const plan = JC.activePlan(), s = plan && findSession(plan, editing);
+    if (s) distance = s.type === 'race' ? Math.round(JC.DIST[plan.goal.dist].exact * 100) / 100 : s.km;
+  }
+  const int = (id, max, label) => { if (!txt(id)) return 0; const n = JC.num(txt(id)); if (!(n >= 0) || n > max) throw new Error(label + ' invalide.'); return Math.round(n); };
+  const hr = int('l-hr', 250, 'Fréquence cardiaque'), elev = int('l-elev', 20000, 'Dénivelé');
+  const url = txt('l-url');
+  if (url && !/^https:\/\//i.test(url)) throw new Error('Le lien doit commencer par https://');
+  return { distance, duration, hr, elev, feel: +$('l-feel').value || 0, url, note: txt('l-note') };
+}
+function updatePace() {
+  let out = '';
+  try {
+    const v = readLog();
+    if (v.distance > 0 && v.duration > 0) out = 'Allure moyenne : ' + JC.fmtPace(v.duration / v.distance);
+  } catch (e) { /* champs en cours de saisie */ }
+  $('l-pace').textContent = out;
+}
+['l-dist', 'l-h', 'l-m', 'l-s'].forEach(id => $(id).addEventListener('input', updatePace));
+
+$('btn-log-save').addEventListener('click', () => {
+  const plan = JC.activePlan(); if (!plan || !editing) return;
+  try {
+    const v = readLog(), old = JC.getLog(plan.id, editing);
+    if (JC.hasStats(v)) { v.done = true; v.doneAt = (old && old.doneAt) || JC.today(); }   // des stats = séance faite
+    JC.saveLog(plan.id, editing, v); closeLog();
+  } catch (e) { $('log-err').textContent = e.message; }
+});
+$('btn-log-cancel').addEventListener('click', closeLog);
+$('btn-log-clear').addEventListener('click', () => {
+  const plan = JC.activePlan(); if (!plan || !editing) return;
+  JC.clearStats(plan.id, editing); closeLog();
+});
+
+/* ---------- objectif ---------- */
+function initGoalForm() {
+  const t = JC.today();
+  $('g-start').value = t; $('g-start').min = JC.addDays(t, -14);
+  $('g-race').min = JC.addDays(t, 4);
+  $('g-weekly').placeholder = String(JC.DEF_WEEKLY[+$('g-level').value]);
+}
+$('g-level').addEventListener('change', () => { $('g-weekly').placeholder = String(JC.DEF_WEEKLY[+$('g-level').value]); });
+
+$('goal-form').addEventListener('submit', e => {
+  e.preventDefault();
+  try {
+    const targetSec = JC.hms($('g-th').value, $('g-tm').value, $('g-ts').value);
+    if (isNaN(targetSec)) throw new Error('Temps visé invalide : entre des nombres.');
+    const refDist = $('g-refd').value, refSec = JC.hms($('g-rh').value, $('g-rm').value, $('g-rs').value);
+    if (isNaN(refSec)) throw new Error('Performance récente invalide : entre des nombres.');
+    if (refDist && !refSec) throw new Error('Entre le temps de ta performance récente, ou remets la distance à « — ».');
+    if (refSec && !refDist) throw new Error('Choisis la distance de ta performance récente.');
+    const wk = $('g-weekly').value.trim(), weeklyKm = wk ? JC.num(wk) : 0;
+    if (!(weeklyKm >= 0)) throw new Error('Km par semaine invalide.');
+    const dist = $('g-dist').value, D = JC.DIST[dist];
+    const lim = (sec, label) => { if (sec && (sec / D.exact < 150 || sec / D.exact > 900)) throw new Error(label + ' peu plausible pour cette distance. Vérifie les heures, minutes et secondes.'); };
+    lim(targetSec, 'Temps visé');
+    if (refSec) { const k = JC.DIST[refDist].exact; if (refSec / k < 150 || refSec / k > 900) throw new Error('Performance récente peu plausible. Vérifie les heures, minutes et secondes.'); }
+    JC.createPlan({ dist, name: $('g-name').value.trim(), raceDate: $('g-race').value, startDate: $('g-start').value,
+      level: +$('g-level').value, days: +$('g-days').value, weeklyKm, longDay: $('g-long').value === '' ? null : +$('g-long').value,
+      targetSec, refDist: refSec ? refDist : '', refSec });
+    $('goal-err').textContent = ''; openWeeks.clear(); closedWeeks.clear();
+    render(); window.scrollTo(0, 0);
+  } catch (err) { $('goal-err').textContent = err.message; }
+});
+
+/* ---------- compte, connexion ---------- */
+$('btn-account').addEventListener('click', () => { showAccount = !showAccount; disarm(); render(); });
+$('btn-logout').addEventListener('click', () => { showAccount = false; editing = null; JC.disconnect(); render(); });
+$('btn-csv').addEventListener('click', () => {
+  const plan = JC.activePlan(); if (!plan) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + JC.toCSV(plan)], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'plan-course-' + JC.today() + '.csv'; document.body.appendChild(a); a.click(); a.remove();
+});
+let armTimer = null;
+function disarm() { const b = $('btn-delplan'); b.classList.remove('armed'); b.textContent = 'Supprimer le plan'; clearTimeout(armTimer); }
+$('btn-delplan').addEventListener('click', () => {
+  const b = $('btn-delplan'), plan = JC.activePlan(); if (!plan) return;
+  if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = 'Confirmer : supprimer le plan et son suivi'; armTimer = setTimeout(disarm, 4000); return; }
+  disarm(); showAccount = false; JC.deletePlan(plan.id); initGoalForm(); render();
+});
+$('setup-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = $('btn-connect'); btn.disabled = true; btn.textContent = 'Connexion…'; $('setup-err').textContent = '';
+  try { await JC.connect($('in-token').value, $('in-repo').value); $('in-token').value = ''; }
+  catch (err) { $('setup-err').textContent = err instanceof TypeError ? 'Impossible de joindre GitHub. Vérifie ta connexion.' : err.message; }
+  btn.disabled = false; btn.textContent = 'Connecter'; render();
+});
+
+/* ---------- installation (PWA) ---------- */
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('btn-install').classList.remove('hidden'); });
+window.addEventListener('appinstalled', () => { installEvt = null; $('btn-install').classList.add('hidden'); });
+$('btn-install').addEventListener('click', async () => {
+  if (!installEvt) return;
+  installEvt.prompt(); try { await installEvt.userChoice; } catch (e) { /* refusé */ }
+  installEvt = null; $('btn-install').classList.add('hidden');
+});
+
+JC.onChange(() => { if (editing) renderSync(); else render(); });
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+JC.init();
+initGoalForm();
+render();
+</script>
+</body>
+</html>
