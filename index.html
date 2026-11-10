@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Plan de course</title>
-<meta name="theme-color" content="#3b5bdb">
+<meta name="theme-color" content="#3b5bdb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161a2e" media="(prefers-color-scheme: dark)">
+<meta name="format-detection" content="telephone=no">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -19,13 +21,22 @@
   <header class="top">
     <h1>Plan de course <small id="who"></small></h1>
     <nav class="tabs">
-      <a class="btn active" href="index.html">Plan</a>
-      <a class="btn" href="stats.html">Stats</a>
+      <a class="btn active" href="index.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M8.5 15l2.5 2.5 4.5-5"/></svg><span>Plan</span></a>
+      <a class="btn" href="stats.html"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6"/></svg><span>Stats</span></a>
       <button class="btn hidden" id="btn-install" type="button">Installer l'app</button>
-      <button class="btn hidden" id="btn-account" type="button">Compte</button>
+      <button class="btn hidden" id="btn-account" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c1-3.8 4-5.5 7.5-5.5s6.500 1.700 7.500 5.500"/></svg><span>Compte</span></button>
     </nav>
   </header>
   <div id="sync" role="status"></div>
+
+  <!-- Installation sur iPhone (Safari n'a pas de bouton d'installation) -->
+  <section class="card hidden" id="ios-hint">
+    <div class="row spread" style="flex-wrap:nowrap;align-items:flex-start">
+      <div><b>Installe l'app sur ton iPhone</b>
+        <p class="muted small" style="margin:4px 0 0">Dans Safari, touche <b>Partager</b> <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;vertical-align:-3px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M12 15V3M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg> puis <b>Sur l'écran d'accueil</b>. L'app s'ouvre ensuite en plein écran, comme une vraie application. Tu devras y recoller ton jeton une fois.</p></div>
+      <button class="icon" id="ios-hint-x" type="button" aria-label="Fermer">✕</button>
+    </div>
+  </section>
 
   <!-- Connexion -->
   <section class="card hidden" id="setup">
@@ -54,7 +65,7 @@
   <section class="card hidden" id="account">
     <h2>Compte</h2>
     <p class="small muted" id="account-info"></p>
-    <label class="row small hidden" id="auto-row" style="gap:8px;cursor:pointer"><input id="chk-auto" type="checkbox" style="width:20px;min-height:20px;height:20px;flex:none"> Ajuster automatiquement le plan selon mes séances</label>
+    <label class="row small hidden" id="auto-row" style="gap:10px;cursor:pointer;flex-wrap:nowrap;margin-top:6px"><input id="chk-auto" type="checkbox" style="width:20px;min-height:20px;height:20px;flex:none"><span>Ajuster automatiquement le plan selon mes séances</span></label>
     <div class="row" style="margin-top:12px">
       <button class="btn small hidden" id="btn-csv" type="button">Exporter en CSV</button>
       <button class="btn small danger hidden" id="btn-delplan" type="button">Supprimer le plan</button>
@@ -115,7 +126,7 @@
     <p class="muted small" id="log-plan" style="margin-top:-4px"></p>
     <p class="muted small">Recopie les chiffres de ton activité Strava. Tout est optionnel.</p>
     <div class="grid2e fld">
-      <div><label class="f" for="l-dist">Distance (km) – vide = distance prévue</label><input id="l-dist" type="text" inputmode="decimal" autocomplete="off"></div>
+      <div><label class="f" for="l-dist">Distance (km)</label><input id="l-dist" type="text" inputmode="decimal" autocomplete="off"></div>
       <div><label class="f">Temps (h · min · s)</label>
         <div class="hms"><input id="l-h" type="text" inputmode="numeric" placeholder="h" aria-label="Heures"><input id="l-m" type="text" inputmode="numeric" placeholder="min" aria-label="Minutes"><input id="l-s" type="text" inputmode="numeric" placeholder="s" aria-label="Secondes"></div></div>
     </div>
@@ -378,7 +389,7 @@ $('goal-form').addEventListener('submit', e => {
 });
 
 /* ---------- compte, connexion ---------- */
-$('btn-account').addEventListener('click', () => { showAccount = !showAccount; disarm(); render(); });
+$('btn-account').addEventListener('click', () => { showAccount = !showAccount; disarm(); render(); if (showAccount) window.scrollTo(0, 0); });
 $('chk-auto').addEventListener('change', e => { JC.setAuto(e.target.checked); if (e.target.checked) JC.autoAdjust(); render(); });
 $('btn-logout').addEventListener('click', () => { showAccount = false; editing = null; JC.disconnect(); render(); });
 $('btn-csv').addEventListener('click', () => {
@@ -403,6 +414,13 @@ $('setup-form').addEventListener('submit', async e => {
 });
 
 /* ---------- installation (PWA) ---------- */
+(() => {
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  let seen = false; try { seen = localStorage.getItem('jc_ioshint') === '1'; } catch (e) { /* stockage indisponible */ }
+  if (ios && !standalone && !seen) $('ios-hint').classList.remove('hidden');
+  $('ios-hint-x').addEventListener('click', () => { $('ios-hint').classList.add('hidden'); try { localStorage.setItem('jc_ioshint', '1'); } catch (e) { /* idem */ } });
+})();
 let installEvt = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('btn-install').classList.remove('hidden'); });
 window.addEventListener('appinstalled', () => { installEvt = null; $('btn-install').classList.add('hidden'); });

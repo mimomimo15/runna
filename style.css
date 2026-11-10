@@ -229,3 +229,50 @@ legend { font-size: .8rem; font-weight: 600; color: var(--muted); padding: 0 6px
   .check.big { width: 100%; justify-content: center; }
   #log .editor-actions { margin: 14px -12px -12px; }
 }
+
+/* ---------- iPhone / application installée ---------- */
+:root { --bar: #3b5bdb; --tabbar: rgba(255,255,255,.86); }
+@media (prefers-color-scheme: dark) { :root { --bar: #161a2e; --tabbar: rgba(25,28,34,.86); } }
+html { -webkit-tap-highlight-color: transparent; }
+body { min-height: 100vh; min-height: 100dvh; }
+.btn, .icon, .check, summary, nav.tabs { -webkit-user-select: none; user-select: none; touch-action: manipulation; -webkit-touch-callout: none; }
+.btn:active, .check:active { transform: scale(.97); }
+.ico { display: none; width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+input, select, textarea { font-size: 16px; }           /* sous 16 px, iOS zoome sur le champ */
+select { -webkit-appearance: none; appearance: none; padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+input[type="checkbox"] { -webkit-appearance: auto; appearance: auto; accent-color: var(--ok); }
+
+@media (max-width: 640px) {
+  /* bandeau de titre collé en haut, sous la barre d'état (heure, batterie) */
+  header.top { position: sticky; top: 0; z-index: 15; background: var(--bar); color: #fff;
+    margin: calc(-10px - env(safe-area-inset-top)) calc(-10px - env(safe-area-inset-right)) 8px calc(-10px - env(safe-area-inset-left));
+    padding: calc(10px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) 10px calc(14px + env(safe-area-inset-left)); }
+  header.top h1 { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; width: 100%; font-size: 1.15rem; }
+  header.top h1 small { display: inline; color: rgba(255,255,255,.78); }
+
+  /* barre d'onglets : icône + libellé, fond translucide, au-dessus de la barre d'accueil */
+  nav.tabs { background: var(--tabbar); -webkit-backdrop-filter: saturate(180%) blur(18px); backdrop-filter: saturate(180%) blur(18px);
+    padding: 4px calc(8px + env(safe-area-inset-right)) calc(2px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left)); }
+  nav.tabs .btn { flex-direction: column; gap: 1px; min-height: 50px; font-size: .7rem; font-weight: 600; border-radius: 12px; padding: 4px; }
+  nav.tabs .btn.active { background: transparent; color: var(--accent); }
+  nav.tabs .ico { display: block; }
+  nav.tabs #btn-install { display: none !important; }
+  .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+
+  /* zones tactiles d'au moins 44 px */
+  .btn { min-height: 44px; }
+  .btn.small { min-height: 40px; padding: 8px 12px; }
+  .icon { width: 44px; height: 44px; }
+  input, select, textarea { min-height: 46px; }
+  .week > summary { min-height: 60px; }
+  .hms { max-width: none; }
+  #g-long, #g-refd, #g-refkm { max-width: none !important; }
+  .grid2e { gap: 8px; }
+  #goal-form button[type=submit], #btn-connect { width: 100%; justify-content: center; min-height: 50px; font-size: 1rem; }
+  #account .row .btn { flex: 1 1 100%; justify-content: center; }
+  #log .editor-actions { bottom: 0; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+  .tablewrap { -webkit-overflow-scrolling: touch; }
+}
+@media (max-width: 640px) and (orientation: landscape) { .chartbox { height: 200px; } }
+body.editing #ios-hint { display: none; }
+@media (max-width: 640px) { .hero details > summary { padding: 11px 0; margin: 0; } nav.tabs #btn-account[aria-pressed="true"] { color: var(--accent); } }
