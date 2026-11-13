@@ -39,14 +39,11 @@ const JC = (() => {
   const fmtNum = n => (Math.round(n * 10) / 10).toLocaleString('fr-CA');
   const fmtKm = n => fmtNum(n) + ' km';
   const p2 = n => String(n).padStart(2, '0');
-  function fmtDur(sec) {
-    sec = Math.round(sec); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
-    return h ? h + ' h ' + p2(m) + ' min ' + p2(s) + ' s' : m + ' min ' + p2(s) + ' s';
-  }
   function fmtClock(sec) {
     sec = Math.round(sec); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
     return h ? h + ':' + p2(m) + ':' + p2(s) : m + ':' + p2(s);
   }
+  const fmtDur = fmtClock;                                                // un seul format de durée partout : 2:00:00, 56:12
   function fmtPace(secPerKm) { let s = Math.round(secPerKm); return Math.floor(s / 60) + ':' + p2(s % 60) + '/km'; }
   /* h, min, s (champs texte) -> secondes ; 0 si tout est vide ; NaN si invalide */
   function hms(h, m, s) {
@@ -89,19 +86,19 @@ const JC = (() => {
 
   async function connect(tokenStr, repoStr) {
     tokenStr = String(tokenStr || '').trim();
-    if (!tokenStr) throw new Error('Colle ton jeton GitHub.');
+    if (!tokenStr) throw new Error('Colle ton jeton GitHub');
     ls.set(K.token, tokenStr);
     try {
       const u = await gh('/user');
-      if (u.status === 401) throw new Error('Jeton invalide ou expiré.');
-      if (!u.ok) throw new Error('GitHub a répondu ' + u.status + '.');
+      if (u.status === 401) throw new Error('Jeton invalide ou expiré');
+      if (!u.ok) throw new Error('GitHub a répondu ' + u.status);
       const user = await u.json();
       let r = String(repoStr || '').trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/$/, '');
       if (!r) r = user.login + '/' + DEFAULT_REPO;
       else if (r.indexOf('/') < 0) r = user.login + '/' + r;
       const rr = await gh('/repos/' + r);
       if (rr.status === 404 || rr.status === 403) throw new Error('Dépôt « ' + r + ' » introuvable avec ce jeton. Vérifie que le dépôt existe et que le jeton y donne accès.');
-      if (!rr.ok) throw new Error('GitHub a répondu ' + rr.status + '.');
+      if (!rr.ok) throw new Error('GitHub a répondu ' + rr.status);
       ls.set(K.login, user.login); ls.set(K.repo, r);
       ls.del(K.cache); ls.del(K.dirty);
       data = blank();
@@ -123,14 +120,14 @@ const JC = (() => {
     const path = '/repos/' + repo() + '/contents/' + FILE;
     const r = await gh(path);
     if (r.status === 404) return { data: null, sha: null };
-    if (r.status === 401) throw new Error('Jeton invalide ou expiré – reconnecte-toi.');
-    if (!r.ok) throw new Error('Lecture impossible (GitHub ' + r.status + ').');
+    if (r.status === 401) throw new Error('Jeton invalide ou expiré, reconnecte-toi');
+    if (!r.ok) throw new Error('Lecture impossible (GitHub ' + r.status + ')');
     const j = await r.json();
     let text;
     if (j.content) text = dec(j.content);
     else { const raw = await gh(path, { accept: 'application/vnd.github.raw+json' }); text = await raw.text(); }
     let parsed = null;
-    try { parsed = JSON.parse(text); } catch (e) { throw new Error('Le fichier ' + FILE + ' du dépôt est illisible.'); }
+    try { parsed = JSON.parse(text); } catch (e) { throw new Error('Le fichier ' + FILE + ' du dépôt est illisible'); }
     if (!parsed || !Array.isArray(parsed.records)) parsed = { records: [] };
     return { data: parsed, sha: j.sha };
   }
@@ -162,8 +159,8 @@ const JC = (() => {
         if (rem.sha) body.sha = rem.sha;
         const r = await gh('/repos/' + repo() + '/contents/' + FILE, { method: 'PUT', body: JSON.stringify(body) });
         if (r.ok) { if (mySeq === seq) ls.del(K.dirty); break; }
-        if (r.status === 403 || r.status === 404) throw new Error('Écriture refusée : le jeton doit avoir la permission « Contents : Read and write » sur le dépôt.');
-        if (r.status !== 409 && r.status !== 422) throw new Error('Enregistrement impossible (GitHub ' + r.status + ').');
+        if (r.status === 403 || r.status === 404) throw new Error('Écriture refusée : le jeton doit avoir la permission « Contents : Read and write » sur le dépôt');
+        if (r.status !== 409 && r.status !== 422) throw new Error('Enregistrement impossible (GitHub ' + r.status + ')');
         if (i === 3) throw new Error('Enregistrement impossible (conflit répété). Réessaie.');
       }
       setStatus('ok');
@@ -231,13 +228,13 @@ const JC = (() => {
 
   function generatePlan(g) {
     const D = DIST[g.dist];
-    if (!D) throw new Error('Choisis une distance.');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(g.raceDate || '')) throw new Error('Choisis la date de la course.');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(g.startDate || '')) throw new Error('Choisis la date de début.');
+    if (!D) throw new Error('Choisis une distance');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(g.raceDate || '')) throw new Error('Choisis la date de la course');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(g.startDate || '')) throw new Error('Choisis la date de début');
     const total = diffDays(g.raceDate, g.startDate) + 1;
-    if (total < 4) throw new Error('La course doit être au moins quelques jours après le début du plan.');
+    if (total < 4) throw new Error('La course doit être au moins quelques jours après le début du plan');
     const N = Math.ceil(total / 7);
-    if (N > 60) throw new Error('La course est trop loin (maximum environ 14 mois).');
+    if (N > 60) throw new Error('La course est trop loin (maximum environ 14 mois)');
     const lv = clamp(g.level | 0, 0, 2), d = clamp(g.days | 0, 3, 6);
     const P = computePaces(g);
     const warnings = [];
@@ -338,7 +335,7 @@ const JC = (() => {
         add(3, { type: 'specific', title: 'Rappel d\'allure', km: clamp(r1(hard * 0.12), 4, 8), pace: em && em * 0.98, desc: 'Footing facile avec 4 × (1 min à ' + raceName + raceP + ' / 1 min lent) au milieu. Juste pour garder les jambes vives.' });
         if (d >= 4) add(5, { type: 'easy', title: 'Déblocage', km: 3, pace: em, desc: '15 à 20 min très faciles + 3 lignes droites de 15 s. Facultatif : le repos complet est aussi correct.' });
         add(6, { type: 'race', title: D.label + (g.name ? ' – ' + g.name : ''), km: D.km,
-          desc: 'Jour de course ! ' + (g.targetSec > 0 ? 'Objectif : ' + fmtDur(g.targetSec) + ', soit ' + fmtPace(g.targetSec / D.exact) + '. ' : '') +
+          desc: 'Jour de course. ' + (g.targetSec > 0 ? 'Objectif : ' + fmtDur(g.targetSec) + ', soit ' + fmtPace(g.targetSec / D.exact) + '. ' : '') +
             'Pars prudemment : la première moitié doit sembler facile. Après la course, entre ton temps et tes stats Strava ici.' });
       } else {
         // volume et sortie longue de la semaine
@@ -561,6 +558,37 @@ const JC = (() => {
     return rows.join('\r\n');
   }
 
+  // ---------- interface partagée (les deux pages) ----------
+  /* Un seul jeu d'icônes au trait (lucide), 24 × 24, trait 1,5 réglé dans style.css. */
+  const ICONS = {
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    plus: '<path d="M5 12h14M12 5v14"/>',
+    chevron: '<path d="m6 9 6 6 6-6"/>',
+    alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3M12 9v4M12 17h.01"/>',
+    offline: '<path d="m2 2 20 20M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07"/>',
+    undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+    link: '<path d="M7 7h10v10M7 17 17 7"/>'
+  };
+  const icon = (name, cls) => '<svg class="i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
+
+  /* État de synchro : un point et un mot court dans l'en-tête ; le message complet
+     n'apparaît dans le bandeau #sync que s'il demande l'attention (hors ligne, erreur). */
+  function statusUI() {
+    if (typeof document === 'undefined') return;
+    const el = id => document.getElementById(id), on = connected(), st = status.state;
+    const short = { loading: 'Chargement', saving: 'Enregistrement', ok: 'Synchronisé', offline: 'Hors ligne', error: 'Erreur' };
+    const long = { offline: 'Hors ligne. Tes changements sont gardés ici et seront envoyés au retour du réseau.', error: status.msg };
+    const box = el('status'), txt = el('status-txt'), who = el('who'), bar = el('sync');
+    if (box) box.dataset.state = on ? st : 'off';
+    if (txt) txt.textContent = on ? short[st] || '' : '';
+    if (who) who.textContent = on ? login() : '';
+    if (bar) {
+      const m = on ? long[st] || '' : '';
+      bar.className = 'notice ' + st + (m ? '' : ' hidden');
+      bar.innerHTML = m ? icon(st === 'error' ? 'alert' : 'offline') + '<span>' + esc(m) + '</span>' : '';
+    }
+  }
+
   function init() {
     loadCache();
     if (connected()) sync();
@@ -573,6 +601,7 @@ const JC = (() => {
   return { init, connect, disconnect, connected, login, repo, sync, onChange: f => listeners.push(f), status: () => status,
     DIST, LEVELS, DAYS, PHASES, TYPES, DEF_WEEKLY, DEFAULT_REPO,
     generatePlan, computePaces, plans, activePlan, createPlan, deletePlan, getLog, saveLog, setDone, hasStats, clearStats, entries, summary, toCSV, evaluate, autoAdjust, undoAdjust, setAuto,
+    icon, statusUI,
     esc, uid, today, toDate, addDays, diffDays, weekday, fmtDate, fmtDay, fmtShort, fmtNum, fmtKm, fmtDur, fmtClock, fmtPace, num, hms, splitHms,
     _merge: merge, _reset: () => { data = blank(); } };
 })();

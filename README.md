@@ -26,6 +26,7 @@ Généré dans le navigateur (`generatePlan` dans `app.js`), semaines calées su
 | `stats.html` | Tuiles, km prévus / courus par semaine (Chart.js), séances complétées, résultat de la course |
 | `app.js` | Connexion GitHub, synchronisation (fusion par enregistrement), générateur de plan, calculs |
 | `style.css` | Styles, mode sombre automatique |
+| `fonts/instrument-sans.woff2` | Police de l'interface (Instrument Sans, licence SIL OFL 1.1), servie depuis le dépôt |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Installation comme application, hors ligne |
 
 ## Mise en ligne

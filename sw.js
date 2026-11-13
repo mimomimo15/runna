@@ -1,9 +1,9 @@
 /* Plan de course – service worker : rend le site installable et utilisable hors ligne.
    Fichiers du site : réseau d'abord (les mises à jour arrivent tout de suite), cache en secours.
    Les appels à l'API GitHub (données, jeton) ne passent jamais par le cache. */
-const CACHE = 'jc-v5';
+const CACHE = 'jc-v6';
 const CHART = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
-const SHELL = ['./', 'index.html', 'stats.html', 'app.js', 'style.css', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-512.png', CHART];
+const SHELL = ['./', 'index.html', 'stats.html', 'app.js', 'style.css', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'fonts/instrument-sans.woff2', CHART];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE)
