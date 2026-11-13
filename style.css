@@ -162,6 +162,13 @@ legend + .sub { padding-top: 4px; }
 .editor-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 24px; }
 .editor-actions .row { display: flex; gap: 8px; }
 #l-pace { min-height: 20px; margin-top: 8px; font-size: 14px; line-height: 20px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+/* lien Strava : ce que l'import a fait, sous le champ */
+.import { display: flex; align-items: flex-start; gap: 8px; min-height: 20px; margin-top: 8px; font-size: 14px; line-height: 20px; color: var(--text-2); }
+.import .i { margin-top: 1px; }
+.import.ok { color: var(--ok); }
+.import.warn { color: var(--text); }
+.import.error { color: var(--danger); }
+#strava .switch-row { margin-top: 16px; }
 #setup details { margin-top: 12px; }
 #setup details > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; list-style: none; font-size: 14px; line-height: 20px; color: var(--text-2); }
 
@@ -342,7 +349,7 @@ td.nil { color: var(--muted); }
 
   .grid3 { grid-template-columns: 1fr 1fr; }
   .grid3.span-first > :first-child, .grid3.span-last > :last-child { grid-column: 1 / -1; }
-  #btn-connect, #goal-form button[type="submit"] { width: 100%; min-height: 48px; }
+  #btn-connect, #btn-strava, #goal-form button[type="submit"] { width: 100%; min-height: 48px; }
   .stack .btn { flex: 1 1 100%; }
 
   /* éditeur : actions collées en bas, toujours sous le pouce */

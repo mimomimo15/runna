@@ -8,6 +8,16 @@ Site statique (GitHub Pages) qui construit un plan d'entraînement de course à 
 - Le site lit et écrit ce fichier avec un jeton « fine-grained » (permission *Contents : Read and write* sur ce seul dépôt), gardé dans le navigateur (`localStorage`, clés `jc_*`).
 - Les instructions de connexion sont affichées sur la page d'accueil tant qu'on n'est pas connecté.
 
+## Strava (facultatif)
+
+Une fois Strava connecté (onglet Compte), coller le lien d'une activité dans les stats d'une séance remplit la distance, le temps, la fréquence cardiaque, le dénivelé et la note.
+
+- Strava n'ouvre ses données qu'avec une autorisation : chaque personne crée sa propre application API sur <https://www.strava.com/settings/api>, avec le domaine du site comme *Authorization Callback Domain*, puis l'autorise une fois (`stravaStart` / `stravaFinish` dans `app.js`).
+- L'ID et le secret de cette application et le jeton de renouvellement sont gardés dans le dépôt privé (enregistrement `strava` de `course.json`), pour que la connexion suive tous les appareils. Le jeton d'accès, valable quelques heures, reste dans le navigateur (`jc_strava_tok`).
+- Accès en lecture seule (`activity:read`, ou `activity:read_all` si on inclut les activités « Moi uniquement »). « Déconnecter Strava » révoque l'accès chez Strava et efface l'enregistrement.
+- Lien complet (`strava.com/activities/…`) : l'activité est lue par son numéro. Lien court de l'app mobile (`strava.app.link/…`) : si le navigateur ne peut pas le suivre, c'est la course à pied du jour de la séance qui est prise.
+- Temps repris : temps en mouvement pour une séance, temps écoulé pour la course.
+
 ## Le plan
 
 Généré dans le navigateur (`generatePlan` dans `app.js`), semaines calées sur le jour de la course :

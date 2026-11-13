@@ -84,6 +84,33 @@
     </div>
   </section>
 
+  <!-- Strava : le lien d'une activité remplit les stats d'une séance -->
+  <section class="card narrow hidden" id="strava">
+    <h2>Strava</h2>
+    <div id="strava-on" class="hidden">
+      <p class="sub"><b id="strava-who"></b></p>
+      <p class="sub" id="strava-info"></p>
+      <div class="stack"><button class="btn danger" id="btn-strava-off" type="button">Déconnecter Strava</button></div>
+    </div>
+    <div id="strava-off">
+      <p class="sub">Connecte Strava pour que le lien d'une activité remplisse les stats d'une séance. À faire une seule fois : l'accès, en lecture seule, est gardé dans ton dépôt privé et suit tous tes appareils.</p>
+      <ol class="steps">
+        <li><div>Sur Strava, ouvre <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">Mon application API</a> et crée une application. Le nom, la catégorie et le site web sont libres ; si Strava demande une icône, n'importe quelle image convient.</div></li>
+        <li><div>Dans le champ <span class="ui">Authorization Callback Domain</span> (domaine de rappel d'autorisation), écris <code id="strava-domain"></code></div></li>
+        <li><div>Recopie ici le <span class="ui">Client ID</span> et le <span class="ui">Client Secret</span>, puis autorise l'accès sur la page Strava qui s'ouvre.</div></li>
+      </ol>
+      <form id="strava-form">
+        <div class="grid2e">
+          <div><label class="f" for="st-id">Client ID</label><input id="st-id" type="text" inputmode="numeric" autocomplete="off" placeholder="123456"></div>
+          <div><label class="f" for="st-secret">Client Secret</label><input id="st-secret" type="password" autocomplete="off"></div>
+        </div>
+        <label class="switch-row"><span>Inclure mes activités réglées sur « Moi uniquement »</span><input class="switch" id="st-all" type="checkbox" role="switch"></label>
+        <div class="err" id="strava-err" role="alert"></div>
+        <div class="actions"><button class="btn primary" id="btn-strava" type="submit">Connecter Strava</button></div>
+      </form>
+    </div>
+  </section>
+
   <!-- Objectif -->
   <section class="card narrow hidden" id="goal">
     <h2>Ton objectif</h2>
@@ -141,7 +168,9 @@
   <section class="card narrow hidden" id="log">
     <h2 id="log-title">Stats de la séance</h2>
     <p class="sub" id="log-plan"></p>
-    <p class="sub">Recopie les chiffres de ton activité Strava. Tout est optionnel.</p>
+    <p class="sub" id="log-help"></p>
+    <div class="fld"><label class="f" for="l-url">Lien de l'activité Strava (optionnel)</label><input id="l-url" type="url" inputmode="url" autocomplete="off" autocapitalize="none" placeholder="https://www.strava.com/activities/…"></div>
+    <p class="import" id="l-import" role="status"></p>
     <div class="grid2e fld">
       <div><label class="f" for="l-dist">Distance (km)</label><input id="l-dist" type="text" inputmode="decimal" autocomplete="off"></div>
       <div><span class="f">Temps (h · min · s)</span>
@@ -154,7 +183,6 @@
       <div><label class="f" for="l-feel">Ressenti</label>
         <select id="l-feel"><option value="0">Non noté</option><option value="1">1 – Très dur</option><option value="2">2 – Dur</option><option value="3">3 – Correct</option><option value="4">4 – Bien</option><option value="5">5 – Super</option></select></div>
     </div>
-    <div class="fld"><label class="f" for="l-url">Lien de l'activité Strava (optionnel)</label><input id="l-url" type="url" inputmode="url" autocomplete="off" autocapitalize="none" placeholder="https://www.strava.com/activities/…"></div>
     <div class="fld"><label class="f" for="l-note">Note (optionnel)</label><textarea id="l-note" placeholder="Comment ça s'est passé ?"></textarea></div>
     <div class="err" id="log-err" role="alert"></div>
     <div class="editor-actions">
@@ -184,6 +212,7 @@ function render() {
   const acct = on && showAccount && !editing;                        // Compte est une vue à part entière
   $('setup').classList.toggle('hidden', on);
   $('account').classList.toggle('hidden', !acct);
+  $('strava').classList.toggle('hidden', !acct);
   $('goal').classList.toggle('hidden', !on || !!plan || acct);
   $('plan').classList.toggle('hidden', !plan || !!editing || acct);
   $('log').classList.toggle('hidden', !editing);
@@ -199,6 +228,7 @@ function render() {
   $('btn-delplan').classList.toggle('hidden', !plan);
   $('auto-row').classList.toggle('hidden', !plan);
   if (plan) $('chk-auto').checked = plan.goal.auto !== false;
+  if (acct) renderStrava();
   if (plan && !editing && !acct) renderPlan(plan);
 }
 
@@ -378,6 +408,10 @@ function openLog(id) {
   const t = JC.splitHms(l.duration); $('l-h').value = t[0] || ''; $('l-m').value = l.duration > 0 ? t[1] : ''; $('l-s').value = l.duration > 0 ? t[2] : '';
   $('l-hr').value = l.hr > 0 ? l.hr : ''; $('l-elev').value = l.elev > 0 ? l.elev : ''; $('l-feel').value = String(l.feel || 0);
   $('l-url').value = l.url || ''; $('l-note').value = l.note || ''; $('log-err').textContent = '';
+  importedFor = l.url || ''; importSeq++; clearTimeout(importTimer); setImport('', '');   // un lien déjà enregistré n'est pas relu
+  imported = { hr: '', elev: '', note: '' };
+  $('log-help').textContent = JC.stravaInfo().connected ? 'Colle le lien de ton activité Strava et les champs se remplissent. Tout est optionnel.'
+    : 'Recopie les chiffres de ton activité Strava. Tout est optionnel.';
   $('btn-log-clear').classList.toggle('hidden', !JC.hasStats(l));
   updatePace(); render(); window.scrollTo(0, 0);
 }
@@ -408,6 +442,75 @@ function updatePace() {
   $('l-pace').textContent = out;
 }
 ['l-dist', 'l-h', 'l-m', 'l-s'].forEach(id => $(id).addEventListener('input', updatePace));
+
+/* ---------- Strava : le lien d'une activité remplit les champs ---------- */
+let importSeq = 0, importTimer = null, importedFor = '';
+let imported = { hr: '', elev: '', note: '' };                         // ce que le dernier import a écrit dans ces champs
+function setImport(state, msg) {
+  const el = $('l-import');
+  el.className = 'import' + (state ? ' ' + state : '');
+  el.innerHTML = msg ? (state === 'ok' ? icon('check') : state === 'error' || state === 'warn' ? icon('alert') : '') + '<span>' + esc(msg) + '</span>' : '';
+}
+function onUrl() {
+  clearTimeout(importTimer);
+  const url = $('l-url').value.trim();
+  if (!JC.stravaLink(url)) { importedFor = ''; importSeq++; setImport('', ''); return; }
+  if (url === importedFor) return;
+  if (!JC.stravaInfo().connected) { setImport('', 'Pour remplir les champs à partir du lien, connecte Strava dans l\'onglet Compte'); return; }
+  importTimer = setTimeout(() => importStrava(url), 400);
+}
+async function importStrava(url) {
+  const plan = JC.activePlan(), s = plan && findSession(plan, editing); if (!s) return;
+  const seq = ++importSeq;
+  setImport('busy', 'Lecture de l\'activité Strava…');
+  try {
+    const a = await JC.stravaImport(url, s.date, s.km);
+    if (seq !== importSeq) return;                                   // le lien a changé ou l'éditeur s'est fermé entre-temps
+    const sec = s.type === 'race' && a.elapsed ? a.elapsed : a.moving || a.elapsed;   // course : temps officiel ; sinon temps en mouvement
+    if (a.distance > 0) $('l-dist').value = String(a.distance).replace('.', ',');
+    if (sec > 0) { const t = JC.splitHms(sec); $('l-h').value = t[0] || ''; $('l-m').value = t[1]; $('l-s').value = t[2]; }
+    // FC, dénivelé, note : la valeur de l'activité ; à défaut, on efface ce qu'un import précédent avait mis, pas ce que tu as tapé
+    const put = (id, v, k) => { const el = $(id), was = el.value.trim(); if (v) el.value = v; else if (was && was === imported[k]) el.value = ''; imported[k] = v ? String(v) : ''; };
+    put('l-hr', a.hr > 0 ? a.hr : '', 'hr');
+    put('l-elev', a.elev > 0 ? a.elev : '', 'elev');
+    const note = $('l-note').value.trim();
+    if (!note || note === imported.note) { $('l-note').value = a.note; imported.note = a.note; }
+    $('l-url').value = importedFor = a.url;                          // le lien court devient le lien complet
+    $('log-err').textContent = '';
+    updatePace();
+    const what = 'Champs remplis à partir de « ' + a.name + ' »';
+    if (!a.run) setImport('warn', what + '. Strava la classe comme « ' + a.sport + ' », pas comme une course à pied.');
+    else if (a.date && a.date !== s.date) setImport('warn', what + '. La séance est prévue le ' + JC.fmtShort(s.date).replace(/\.$/, '') + ', cette activité date du ' + JC.fmtShort(a.date).replace(/\.$/, '') + '.');
+    else setImport('ok', what);
+  } catch (e) { if (seq === importSeq) setImport('error', e.message); }
+}
+$('l-url').addEventListener('input', onUrl);
+
+let stravaBusy = false, stravaErr = '';
+function renderStrava() {
+  const st = JC.stravaInfo();
+  $('strava-on').classList.toggle('hidden', !st.connected);
+  $('strava-off').classList.toggle('hidden', st.connected);
+  $('strava-who').textContent = 'Connecté' + (st.athlete ? ' au compte de ' + st.athlete : '');
+  $('strava-info').textContent = 'Colle le lien d\'une activité dans les stats d\'une séance et les champs se remplissent.' +
+    (st.all ? '' : ' Les activités réglées sur « Moi uniquement » ne sont pas incluses.');
+  $('strava-domain').textContent = location.hostname;
+  if (!st.connected && st.clientId && !$('st-id').value) $('st-id').value = st.clientId;
+  $('strava-err').textContent = stravaErr;
+  $('btn-strava').disabled = $('btn-strava-off').disabled = stravaBusy;
+  $('btn-strava').textContent = stravaBusy ? 'Connexion à Strava…' : 'Connecter Strava';
+}
+$('strava-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  stravaBusy = true; stravaErr = ''; renderStrava();
+  try { location.href = await JC.stravaStart($('st-id').value, $('st-secret').value, $('st-all').checked, location.origin + location.pathname); }
+  catch (err) { stravaBusy = false; stravaErr = err.message; renderStrava(); }
+});
+$('btn-strava-off').addEventListener('click', async () => {
+  stravaBusy = true; stravaErr = ''; renderStrava();
+  await JC.stravaDisconnect();
+  stravaBusy = false; $('st-secret').value = ''; render();
+});
 
 $('btn-log-save').addEventListener('click', () => {
   const plan = JC.activePlan(); if (!plan || !editing) return;
@@ -533,6 +636,14 @@ JC.onChange(() => {
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 if (location.hash === '#compte') { showAccount = true; try { history.replaceState(null, '', location.pathname); } catch (e) { /* sans importance */ } }
 JC.init();
+(() => {
+  const q = new URLSearchParams(location.search);
+  if (!q.has('state') || !(q.has('code') || q.has('error'))) return;
+  try { history.replaceState(null, '', location.pathname); } catch (e) { /* sans importance */ }
+  if (!JC.connected()) return;
+  showAccount = true; stravaBusy = true;
+  JC.stravaFinish(q).then(() => { stravaErr = ''; }, err => { stravaErr = err.message; }).then(() => { stravaBusy = false; render(); });
+})();
 initGoalForm();
 render();
 </script>

@@ -1,7 +1,7 @@
 /* Plan de course – service worker : rend le site installable et utilisable hors ligne.
    Fichiers du site : réseau d'abord (les mises à jour arrivent tout de suite), cache en secours.
-   Les appels à l'API GitHub (données, jeton) ne passent jamais par le cache. */
-const CACHE = 'jc-v6';
+   Les appels à GitHub et à Strava (données, jetons) ne passent jamais par le cache. */
+const CACHE = 'jc-v7';
 const CHART = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 const SHELL = ['./', 'index.html', 'stats.html', 'app.js', 'style.css', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'fonts/instrument-sans.woff2', CHART];
 
@@ -21,7 +21,7 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.hostname === 'api.github.com') return;
+  if (url.origin !== self.location.origin && url.hostname !== 'cdnjs.cloudflare.com') return;   // GitHub, Strava : jamais mis en cache
 
   if (url.origin !== self.location.origin) {           // bibliothèque du CDN : cache d'abord
     e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => {
@@ -32,7 +32,7 @@ self.addEventListener('fetch', e => {
   }
 
   e.respondWith(fetch(req).then(res => {               // fichiers du site : réseau d'abord
-    if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
+    if (res.ok && !url.search) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }   // pas d'adresse avec paramètres (retour d'autorisation Strava)
     return res;
   }).catch(() => caches.match(req, { ignoreSearch: true })
     .then(hit => hit || (req.mode === 'navigate' ? caches.match('index.html') : Response.error()))));
